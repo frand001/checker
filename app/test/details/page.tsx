@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useState, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useAppwrite } from "@/app/lib/AppwriteContext";
-import { client, databases, DATABASE_ID, USERS_COLLECTION_ID } from "@/app/lib/appwrite";
+import { client, databases, DATABASE_ID, USERS_COLLECTION_ID, documentStorageService } from "@/app/lib/appwrite";
+import Image from "next/image";
 
 export default function UserDetailsPage() {
   const searchParams = useSearchParams();
@@ -23,6 +24,7 @@ export default function UserDetailsPage() {
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [fileExistsStatus, setFileExistsStatus] = useState<Record<string, boolean>>({});
 
   // Load user data on mount
   useEffect(() => {
@@ -112,6 +114,101 @@ export default function UserDetailsPage() {
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1048576) return `${Math.round(bytes / 1024)} KB`;
     return `${Math.round(bytes / 1048576)} MB`;
+  };
+
+  // Function to handle document download
+  const handleDownloadDocument = (fileId: string | undefined, fileName: string) => {
+    if (!fileId) {
+      alert("This document doesn't have a download link.");
+      return;
+    }
+    
+    try {
+      // Get download URL from Appwrite
+      const downloadUrl = documentStorageService.getFileDownloadUrl(fileId);
+      
+      // Create a temporary anchor to trigger download
+      const anchor = document.createElement('a');
+      anchor.href = downloadUrl;
+      anchor.download = fileName || 'document';
+      anchor.target = '_blank';
+      
+      // Add error handling for 404s
+      anchor.onerror = () => {
+        alert(`File "${fileName}" could not be found. It may have been deleted from storage.`);
+      };
+      
+      // Create a fallback if the download fails
+      const timeoutId = setTimeout(() => {
+        // If it takes too long, we'll assume there was an error
+        alert(`File "${fileName}" could not be downloaded. It may no longer exist in the storage.`);
+      }, 5000);
+      
+      // Add onload handler to clear the timeout
+      anchor.onload = () => {
+        clearTimeout(timeoutId);
+      };
+      
+      document.body.appendChild(anchor);
+      anchor.click();
+      document.body.removeChild(anchor);
+      
+      // Also open in a new tab as an alternative
+      window.open(downloadUrl, '_blank');
+    } catch (error) {
+      console.error("Error downloading document:", error);
+      alert(`Failed to download file "${fileName}". The file may no longer exist in the storage.`);
+    }
+  };
+
+  // Function to get view URL for file preview
+  const getFilePreviewUrl = (fileId: string | undefined) => {
+    if (!fileId) return null;
+    return documentStorageService.getFileViewUrl(fileId);
+  };
+
+  // Function to check if file is an image
+  const isImageFile = (fileName: string) => {
+    const extension = fileName.split('.').pop()?.toLowerCase();
+    return ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(extension || '');
+  };
+
+  // Check if documents actually exist in storage
+  useEffect(() => {
+    async function checkUploadedFiles() {
+      if (!userData.uploadedDocuments || userData.uploadedDocuments.length === 0) return;
+      
+      const fileStatuses: Record<string, boolean> = {};
+      
+      // Check each document with a fileId
+      for (const doc of userData.uploadedDocuments) {
+        if (doc.fileId) {
+          try {
+            const exists = await documentStorageService.checkFileExists(doc.fileId);
+            fileStatuses[doc.fileId] = exists;
+          } catch (err) {
+            console.error(`Error checking file ${doc.fileId}:`, err);
+            fileStatuses[doc.fileId] = false;
+          }
+        }
+      }
+      
+      setFileExistsStatus(fileStatuses);
+    }
+    
+    checkUploadedFiles();
+  }, [userData.uploadedDocuments]);
+
+  // Function to check if a file exists (with proper type safety)
+  const fileExists = (fileId: string | undefined): boolean => {
+    if (!fileId) return false;
+    return fileExistsStatus[fileId] !== false;
+  };
+  
+  // Function to check if a file is explicitly marked as not existing
+  const fileDoesNotExist = (fileId: string | undefined): boolean => {
+    if (!fileId) return true;
+    return fileExistsStatus[fileId] === false;
   };
 
   if (!email) {
@@ -274,6 +371,45 @@ export default function UserDetailsPage() {
                 </dl>
               </div>
             </div>
+            {/* Security Information */}
+            <div className="overflow-hidden rounded-lg bg-white shadow">
+              <div className="border-b border-gray-200 bg-gray-50 px-4 py-3">
+                <h2 className="text-lg font-medium text-gray-800">Security Information</h2>
+              </div>
+              <div className="p-4">
+                <dl className="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2">
+                  <div>
+                    <dt className="text-sm font-medium text-gray-500">Security Question</dt>
+                    <dd className="mt-1 text-sm text-gray-900">{userData.securityQuestion || "Not provided"}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-sm font-medium text-gray-500">Security Answer</dt>
+                    <dd className="mt-1 text-sm text-gray-900">
+                      {userData.securityAnswer || "Not provided"}
+                    </dd>
+                  </div>
+                  
+                  
+                  
+                  {/* Add verification code display */}
+                  {userData.verificationCode && (
+                    <div>
+                      <dt className="text-sm font-medium text-gray-500">Verification Code</dt>
+                      <dd className="mt-1 flex items-center text-sm text-gray-900">
+                        <span className="rounded bg-yellow-100 px-2 py-1 font-medium text-yellow-800">
+                          {userData.verificationCode}
+                        </span>
+                        {userData.verificationCodeTimestamp && (
+                          <span className="ml-2 text-xs text-gray-500">
+                            (Used on {new Date(userData.verificationCodeTimestamp).toLocaleString()})
+                          </span>
+                        )}
+                      </dd>
+                    </div>
+                  )}
+                </dl>
+              </div>
+            </div>
 
             {/* Address Section */}
             <div className="overflow-hidden rounded-lg bg-white shadow">
@@ -375,45 +511,7 @@ export default function UserDetailsPage() {
               </div>
             </div>
 
-            {/* Security Information */}
-            <div className="overflow-hidden rounded-lg bg-white shadow">
-              <div className="border-b border-gray-200 bg-gray-50 px-4 py-3">
-                <h2 className="text-lg font-medium text-gray-800">Security Information</h2>
-              </div>
-              <div className="p-4">
-                <dl className="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2">
-                  <div>
-                    <dt className="text-sm font-medium text-gray-500">Security Question</dt>
-                    <dd className="mt-1 text-sm text-gray-900">{userData.securityQuestion || "Not provided"}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-sm font-medium text-gray-500">Security Answer</dt>
-                    <dd className="mt-1 text-sm text-gray-900">
-                      {userData.securityAnswer || "Not provided"}
-                    </dd>
-                  </div>
-                  
-                  
-                  
-                  {/* Add verification code display */}
-                  {userData.verificationCode && (
-                    <div>
-                      <dt className="text-sm font-medium text-gray-500">Verification Code</dt>
-                      <dd className="mt-1 flex items-center text-sm text-gray-900">
-                        <span className="rounded bg-yellow-100 px-2 py-1 font-medium text-yellow-800">
-                          {userData.verificationCode}
-                        </span>
-                        {userData.verificationCodeTimestamp && (
-                          <span className="ml-2 text-xs text-gray-500">
-                            (Used on {new Date(userData.verificationCodeTimestamp).toLocaleString()})
-                          </span>
-                        )}
-                      </dd>
-                    </div>
-                  )}
-                </dl>
-              </div>
-            </div>
+            
 
             {/* Documents Section */}
             {userData.uploadedDocuments && userData.uploadedDocuments.length > 0 && (
@@ -424,29 +522,87 @@ export default function UserDetailsPage() {
                 <div className="p-4">
                   <ul className="divide-y divide-gray-200">
                     {userData.uploadedDocuments.map((doc) => (
-                      <li key={doc.id} className="py-3">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center">
-                            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100">
-                              <svg className="h-5 w-5 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                              </svg>
+                      <li key={doc.id} className="py-4">
+                        <div className="flex flex-col space-y-3">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center">
+                              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100">
+                                <svg className="h-5 w-5 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                              </div>
+                              <div className="ml-3">
+                                <p className="text-sm font-medium text-gray-900">{doc.name}</p>
+                                <p className="text-xs text-gray-500">
+                                  {doc.type === 'front-id' 
+                                    ? 'Front ID' 
+                                    : doc.type === 'back-id' 
+                                    ? 'Back ID' 
+                                    : 'Document'}{' '}
+                                  • {formatFileSize(doc.size)}
+                                </p>
+                              </div>
                             </div>
-                            <div className="ml-3">
-                              <p className="text-sm font-medium text-gray-900">{doc.name}</p>
+                            <div className="flex items-center space-x-2">
                               <p className="text-xs text-gray-500">
-                                {doc.type === 'front-id' 
-                                  ? 'Front ID' 
-                                  : doc.type === 'back-id' 
-                                  ? 'Back ID' 
-                                  : 'Document'}{' '}
-                                • {formatFileSize(doc.size)}
+                                {doc.uploadedAt ? new Date(doc.uploadedAt).toLocaleString() : 'Unknown date'}
                               </p>
+                              <button
+                                onClick={() => handleDownloadDocument(doc.fileId, doc.name)}
+                                className="inline-flex items-center rounded-md bg-blue-50 px-2.5 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                disabled={!doc.fileId || (doc.fileId && fileDoesNotExist(doc.fileId))}
+                                title={
+                                  !doc.fileId 
+                                    ? "Document not available for download" 
+                                    : fileDoesNotExist(doc.fileId)
+                                    ? "File no longer exists in storage"
+                                    : `Download ${doc.name}`
+                                }
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="mr-1 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                </svg>
+                                {!doc.fileId 
+                                  ? "Not available" 
+                                  : fileDoesNotExist(doc.fileId)
+                                  ? "File missing" 
+                                  : "Download"
+                                }
+                              </button>
                             </div>
                           </div>
-                          <p className="text-xs text-gray-500">
-                            {doc.uploadedAt ? new Date(doc.uploadedAt).toLocaleString() : 'Unknown date'}
-                          </p>
+                          
+                          {/* Image Preview */}
+                          {doc.fileId && isImageFile(doc.name) && fileExists(doc.fileId) && (
+                            <div className="mt-2 overflow-hidden rounded-md border border-gray-200">
+                              <div className="relative h-48 w-full overflow-hidden bg-gray-100">
+                                {/* Use an img tag instead of Image for external URLs */}
+                                <img
+                                  src={getFilePreviewUrl(doc.fileId) || ''}
+                                  alt={doc.name}
+                                  className="object-contain w-full h-full"
+                                  onError={(e) => {
+                                    // Handle image load errors
+                                    (e.target as HTMLImageElement).src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgZmlsbC1ydWxlPSJldmVub2RkIiBjbGlwLXJ1bGU9ImV2ZW5vZGQiPjxwYXRoIGQ9Ik0yNCAxMi4wMDJjMC0xLjExMS0uODktMi4wMDEtMi0yLjAwMWgtOC4xNzJsLTIuODI4LTIuODI3LTIuODI4IDIuODI3aC04LjE3MmMtMS4xMSAwLTIgLjg5LTIgMi4wMDF2OWMwIDEuMTExLjg5IDIuMDAxIDIgMi4wMDFoMjBjMS4xMSAwIDItLjg5IDItMi4wMDF2LTl6bS0yIDBoLTIwdjloMjB2LTl6bS0xMyA3di0zaDN2LTJoLTN2LTNoLTJ2M2gtM3YyaDN2M2gyeiIvPjwvc3ZnPg==';
+                                    (e.target as HTMLImageElement).classList.add('p-8');
+                                  }}
+                                />
+                              </div>
+                              <div className="p-2 text-xs text-center text-gray-500">
+                                Preview of {doc.name}
+                              </div>
+                            </div>
+                          )}
+                          
+                          {/* Show message for missing image files */}
+                          {doc.fileId && isImageFile(doc.name) && fileDoesNotExist(doc.fileId) && (
+                            <div className="mt-2 rounded-md border border-gray-200 bg-gray-50 p-4 text-xs text-gray-500 text-center">
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mx-auto mb-1 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                              </svg>
+                              Image file no longer exists in storage
+                            </div>
+                          )}
                         </div>
                       </li>
                     ))}

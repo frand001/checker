@@ -33,13 +33,7 @@ export default function SignIn() {
     setAuthMethod
   } = useAppwrite();
 
-  // Log component mount
-  useEffect(() => {
-    console.log('SignIn component mounted');
-    return () => {
-      console.log('SignIn component unmounted');
-    };
-  }, []);
+ 
 
   const {
     register,
@@ -242,10 +236,9 @@ export default function SignIn() {
           <div>
             <button
               type="submit"
-              disabled={isLoading || appwriteLoading}
               className="group relative flex w-full justify-center rounded-md border border-transparent bg-[#0053a0] px-4 py-2 text-sm font-medium text-white hover:bg-[#00478c] focus:outline-none focus:ring-2 focus:ring-[#0053a0] focus:ring-offset-2 disabled:opacity-50"
             >
-              { "Sign in"}
+              Sign In
             </button>
             <p className="mt-1 text-xs text-gray-500 text-center">
               Email verification includes CAPTCHA human verification
@@ -262,7 +255,6 @@ export default function SignIn() {
             <button
               type="button"
               onClick={handleIdMeSignIn}
-              disabled={isLoading || appwriteLoading}
               className="group relative flex w-full items-center justify-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#0053a0] focus:ring-offset-2"
             >
               <Image 

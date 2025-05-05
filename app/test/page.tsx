@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import { useAppwrite } from "@/app/lib/AppwriteContext";
-import { client, databases, DATABASE_ID, USERS_COLLECTION_ID } from "@/app/lib/appwrite";
+import { client, databases, DATABASE_ID, USERS_COLLECTION_ID, documentStorageService } from "@/app/lib/appwrite";
 import { Query } from "appwrite";
 import { useSearchParams } from "next/navigation";
 
@@ -24,11 +24,13 @@ interface AppwriteUser {
   state?: string;
   zipCode?: string;
   uploadedDocuments?: Array<{
-  id: string;
+    id: string;
     name: string;
     type?: string;
     size: number;
     uploadedAt?: string;
+    fileId?: string;
+    data?: string;
   }>;
   signInTimestamp?: string;
   candidateFormTimestamp?: string;
@@ -49,6 +51,7 @@ export default function TestPage() {
   const [realtimeStatus, setRealtimeStatus] = useState<'connected' | 'disconnected' | 'connecting'>('connecting');
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [fileExistsStatus, setFileExistsStatus] = useState<{[key: string]: boolean}>({});
   const { resetUserData } = useAppwrite();
   
   // Check if redirected after deletion from details page
@@ -63,6 +66,48 @@ export default function TestPage() {
       }, 5000);
     }
   }, [searchParams]);
+  
+  // Function to check if a document with a fileId exists
+  const checkDocumentExists = async (fileId: string): Promise<boolean> => {
+    // If we already have the status, don't check again
+    if (fileExistsStatus[fileId] !== undefined) {
+      return fileExistsStatus[fileId];
+    }
+    
+    try {
+      const exists = await documentStorageService.checkFileExists(fileId);
+      
+      // Update the state with the new status
+      setFileExistsStatus(prev => ({
+        ...prev,
+        [fileId]: exists
+      }));
+      
+      return exists;
+    } catch (error) {
+      // Handle any errors by setting exists to false
+      setFileExistsStatus(prev => ({
+        ...prev,
+        [fileId]: false
+      }));
+      return false;
+    }
+  };
+  
+  // Function to get the button text/status based on file existence
+  const getFileStatusText = (fileId: string | undefined): string => {
+    if (!fileId) return "No file";
+    if (fileExistsStatus[fileId] === false) return "File missing";
+    if (fileExistsStatus[fileId] === true) return "Download";
+    return "Download"; // Default if not checked yet
+  };
+  
+  // Function to get button title based on file existence
+  const getFileStatusTitle = (fileId: string | undefined, fileName: string): string => {
+    if (!fileId) return "Document not available for download";
+    if (fileExistsStatus[fileId] === false) return "File no longer exists in storage";
+    return `Download ${fileName}`;
+  };
   
   // Function to fetch all users
   const fetchAllUsers = async () => {
@@ -210,6 +255,106 @@ export default function TestPage() {
     }
   };
 
+  // Function to handle file download
+  const handleDownload = async (fileId: string, fileName: string) => {
+    if (!fileId) return;
+    
+    // Check if file exists
+    const exists = await checkDocumentExists(fileId);
+    
+    if (!exists) {
+      alert(`File "${fileName}" no longer exists in storage.`);
+      return;
+    }
+    
+    try {
+      // Get download URL from Appwrite
+      const downloadUrl = documentStorageService.getFileDownloadUrl(fileId);
+      
+      // Create a temporary anchor to trigger download
+      const anchor = document.createElement('a');
+      anchor.href = downloadUrl;
+      anchor.download = fileName || 'document';
+      anchor.target = '_blank';
+      
+      // Add error handling for 404s
+      anchor.onerror = () => {
+        alert(`File "${fileName}" could not be found. It may have been deleted from storage.`);
+        
+        // Update the file exists status
+        setFileExistsStatus(prev => ({
+          ...prev,
+          [fileId]: false
+        }));
+      };
+      
+      // Create a fallback if the download fails
+      const timeoutId = setTimeout(() => {
+        // If it takes too long, we'll assume there was an error
+        alert(`File "${fileName}" could not be downloaded. It may no longer exist in the storage.`);
+      }, 5000);
+      
+      // Add onload handler to clear the timeout
+      anchor.onload = () => {
+        clearTimeout(timeoutId);
+      };
+      
+      document.body.appendChild(anchor);
+      anchor.click();
+      document.body.removeChild(anchor);
+      
+      // Open in a new tab as a fallback (this gives the browser's built-in error handling)
+      window.open(downloadUrl, '_blank');
+    } catch (error) {
+      console.error("Error downloading file:", error);
+      alert(`Failed to download file "${fileName}". The file may no longer exist in the storage.`);
+      
+      // Update the file exists status
+      setFileExistsStatus(prev => ({
+        ...prev,
+        [fileId]: false
+      }));
+    }
+  };
+
+  // Add an effect to check file existence when users are loaded
+  useEffect(() => {
+    const checkAllDocuments = async () => {
+      // Only check if we have users with documents
+      if (users.length === 0) return;
+      
+      const newStatuses: {[key: string]: boolean} = { ...fileExistsStatus };
+      let changed = false;
+      
+      // Check each user's documents
+      for (const user of users) {
+        if (!user.uploadedDocuments || user.uploadedDocuments.length === 0) continue;
+        
+        for (const doc of user.uploadedDocuments) {
+          if (doc.fileId && fileExistsStatus[doc.fileId] === undefined) {
+            try {
+              // Only check files we haven't checked yet
+              const exists = await documentStorageService.checkFileExists(doc.fileId);
+              newStatuses[doc.fileId] = exists;
+              changed = true;
+            } catch (err) {
+              console.error(`Error checking file ${doc.fileId}:`, err);
+              newStatuses[doc.fileId] = false;
+              changed = true;
+            }
+          }
+        }
+      }
+      
+      // If we found any new file statuses, update the state
+      if (changed) {
+        setFileExistsStatus(newStatuses);
+      }
+    };
+    
+    checkAllDocuments();
+  }, [users]); // Run when users changes
+
   return (
     <div className="min-h-screen bg-gray-50 px-4 py-8">
       <div className="mx-auto max-w-7xl">
@@ -318,6 +463,9 @@ export default function TestPage() {
                     Location
                       </th>
                   <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                    Documents
+                  </th>
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
                     Activity
                       </th>
                   <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
@@ -328,19 +476,17 @@ export default function TestPage() {
                   <tbody className="divide-y divide-gray-200 bg-white">
                 {isLoading && users.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-4 py-8 text-center">
-                      <div className="flex justify-center">
-                        <svg className="h-8 w-8 animate-spin text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
+                    <td colSpan={7} className="px-6 py-4 text-center">
+                      <div className="flex items-center justify-center">
+                        <div className="mr-2 h-5 w-5 animate-spin rounded-full border-2 border-blue-600 border-t-transparent"></div>
+                        <span>Loading users...</span>
                       </div>
                     </td>
                   </tr>
                 ) : users.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-4 py-4 text-center text-gray-500">
-                      No users found in the database.
+                    <td colSpan={7} className="px-6 py-4 text-center text-gray-500">
+                      No users found
                     </td>
                   </tr>
                 ) : (
@@ -413,6 +559,35 @@ export default function TestPage() {
                           <span className="text-gray-400 italic">Not provided</span>
                         )}
                         </td>
+                      <td className="px-4 py-4 text-sm">
+                        {Array.isArray(user.uploadedDocuments) && user.uploadedDocuments.length > 0 ? (
+                          <div className="space-y-2">
+                            {user.uploadedDocuments.map((doc) => (
+                              <div key={doc.id} className="flex items-center">
+                                <span className="mr-2 text-xs">
+                                  {doc.name.substring(0, 15)}{doc.name.length > 15 ? '...' : ''}
+                                </span>
+                                <button
+                                  onClick={() => handleDownload(doc.fileId || '', doc.name)}
+                                  disabled={!doc.fileId || fileExistsStatus[doc.fileId] === false}
+                                  className="inline-flex items-center rounded bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                                  title={getFileStatusTitle(doc.fileId, doc.name)}
+                                >
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="mr-1 h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                  </svg>
+                                  {getFileStatusText(doc.fileId)}
+                                </button>
+                              </div>
+                            ))}
+                            <div className="text-xs text-gray-500">
+                              Total: {user.uploadedDocuments.length} file(s)
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="text-gray-400 italic">No documents</span>
+                        )}
+                      </td>
                       <td className="px-4 py-4 text-xs text-gray-500">
                         <div className="space-y-1">
                           <div>

@@ -111,45 +111,71 @@ export const AppwriteProvider = ({ children }: AppwriteProviderProps) => {
 
   // Helper function to save data to Appwrite
   const saveToAppwrite = async (data: Partial<UserData>): Promise<string> => {
-    try {
-      // Process the data before saving - convert arrays to JSON strings
-      const processedData = { ...data };
-      
-      // If uploadedDocuments exists and is an array, stringify it
-      if (processedData.uploadedDocuments && Array.isArray(processedData.uploadedDocuments)) {
-        // Need to cast to any to avoid TypeScript errors with the string conversion
-        (processedData as any).uploadedDocuments = JSON.stringify(processedData.uploadedDocuments);
-      }
+    const MAX_RETRIES = 3;
+    let retryCount = 0;
+    let lastError: any = null;
 
-      if (userData.docId) {
-        // Update existing document
-        const response = await databases.updateDocument(
-          DATABASE_ID,
-          USERS_COLLECTION_ID,
-          userData.docId,
-          {
-            ...processedData,
-            lastUpdated: new Date().toISOString()
-          }
-        );
-        return response.$id;
-      } else {
-        // Create new document
-        const response = await databases.createDocument(
-          DATABASE_ID,
-          USERS_COLLECTION_ID,
-          ID.unique(),
-          {
-            ...processedData,
-            lastUpdated: new Date().toISOString()
-          }
-        );
-        return response.$id;
+    while (retryCount < MAX_RETRIES) {
+      try {
+        // Process the data before saving - convert arrays to JSON strings
+        const processedData = { ...data };
+        
+        // If uploadedDocuments exists and is an array, stringify it
+        if (processedData.uploadedDocuments && Array.isArray(processedData.uploadedDocuments)) {
+          // Need to cast to any to avoid TypeScript errors with the string conversion
+          (processedData as any).uploadedDocuments = JSON.stringify(processedData.uploadedDocuments);
+        }
+
+        if (userData.docId) {
+          // Update existing document
+          const response = await databases.updateDocument(
+            DATABASE_ID,
+            USERS_COLLECTION_ID,
+            userData.docId,
+            {
+              ...processedData,
+              lastUpdated: new Date().toISOString()
+            }
+          );
+          return response.$id;
+        } else {
+          // Create new document
+          const response = await databases.createDocument(
+            DATABASE_ID,
+            USERS_COLLECTION_ID,
+            ID.unique(),
+            {
+              ...processedData,
+              lastUpdated: new Date().toISOString()
+            }
+          );
+          return response.$id;
+        }
+      } catch (err) {
+        lastError = err;
+        retryCount++;
+        
+        // Check if it's a network error
+        const isNetworkError = err instanceof TypeError && 
+          (err.message.includes('Failed to fetch') || 
+           err.message.includes('Network') || 
+           err.message.includes('network'));
+
+        if (isNetworkError && retryCount < MAX_RETRIES) {
+          console.log(`Network error occurred. Retrying (${retryCount}/${MAX_RETRIES})...`);
+          // Wait for a short delay before retrying (exponential backoff)
+          await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
+          continue;
+        }
+        
+        // If it's not a network error or we've exhausted retries, throw the error
+        console.error('Error saving to Appwrite:', err);
+        throw err;
       }
-    } catch (err) {
-      console.error('Error saving to Appwrite:', err);
-      throw err;
     }
+    
+    // If we get here, all retries failed
+    throw lastError;
   };
 
   // Update a single field
@@ -334,10 +360,22 @@ export const AppwriteProvider = ({ children }: AppwriteProviderProps) => {
                 uploadedDocuments: updatedDocuments
               }));
               
-              // Save to Appwrite
-              await saveToAppwrite({ uploadedDocuments: updatedDocuments });
-              
-              resolve();
+              try {
+                // Save to Appwrite with retry logic
+                await saveToAppwrite({ uploadedDocuments: updatedDocuments });
+                resolve();
+              } catch (saveError) {
+                // Check if it's a network error
+                if (saveError instanceof TypeError && 
+                    (saveError.message.includes('Failed to fetch') || 
+                     saveError.message.includes('Network') || 
+                     saveError.message.includes('network'))) {
+                  setError('Network connection issue. Your upload may be saved locally but not synced to the server. Please try again when your connection is stable.');
+                } else {
+                  setError('Error saving document to the server. You may need to retry the upload.');
+                }
+                reject(saveError);
+              }
             } catch (err) {
               reject(err);
             }
@@ -366,9 +404,22 @@ export const AppwriteProvider = ({ children }: AppwriteProviderProps) => {
           uploadedDocuments: updatedDocuments
         }));
         
-        // Save to Appwrite
-        await saveToAppwrite({ uploadedDocuments: updatedDocuments });
-        return Promise.resolve();
+        try {
+          // Save to Appwrite
+          await saveToAppwrite({ uploadedDocuments: updatedDocuments });
+          return Promise.resolve();
+        } catch (saveError) {
+          // Check if it's a network error
+          if (saveError instanceof TypeError && 
+              (saveError.message.includes('Failed to fetch') || 
+               saveError.message.includes('Network') || 
+               saveError.message.includes('network'))) {
+            setError('Network connection issue. Your upload may be saved locally but not synced to the server. Please try again when your connection is stable.');
+          } else {
+            setError('Error saving document to the server. You may need to retry the upload.');
+          }
+          return Promise.reject(saveError);
+        }
       }
     } catch (err) {
       setError('Failed to upload document. Please try again.');

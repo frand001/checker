@@ -200,6 +200,18 @@ export const documentStorageService = {
       console.error('Error listing files:', error);
       throw error;
     }
+  },
+  
+  // Check if a file exists
+  async checkFileExists(fileId: string): Promise<boolean> {
+    try {
+      // Try to get the file to check if it exists
+      await storage.getFile(DOCUMENTS_BUCKET_ID, fileId);
+      return true;
+    } catch (error) {
+      console.error('Error checking file existence:', error);
+      return false;
+    }
   }
 };
 

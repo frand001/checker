@@ -35,6 +35,10 @@ export default function FileUploader({
 }: FileUploaderProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [browserReady, setBrowserReady] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [savedFile, setSavedFile] = useState<File | null>(null);
 
   // Use effect to detect browser environment
   useEffect(() => {
@@ -58,24 +62,44 @@ export default function FileUploader({
   }
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files || e.target.files.length === 0) return;
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
     
-    const file = e.target.files[0];
-    const maxSize = maxSizeMB * 1024 * 1024; // Convert MB to bytes
+    const file = files[0];
     
-    // Validate file size
-    if (file.size > maxSize) {
-      onError(`File size exceeds the ${maxSizeMB}MB limit`);
-      e.target.value = '';
+    // Validate file type
+    const fileExtension = '.' + file.name.split('.').pop()?.toLowerCase();
+    if (!acceptedFileTypes.includes(fileExtension)) {
+      setError(`Invalid file type. Allowed types: ${acceptedFileTypes.split(', ').join(', ')}`);
       return;
     }
     
+    // Validate file size
+    const maxSize = maxSizeMB * 1024 * 1024;
+    if (file.size > maxSize) {
+      setError(`File is too large. Maximum size is ${maxSizeMB}MB.`);
+      return;
+    }
+    
+    // Save file for potential retry
+    setSavedFile(file);
+    
+    // Upload to Appwrite Storage
+    await uploadFile(file);
+  };
+  
+  const uploadFile = async (file: File) => {
     setIsUploading(true);
+    setUploadProgress(10);
+    setError(null);
+    setSuccess(null);
     
     try {
+      setUploadProgress(30);
+      
       const reader = new FileReader();
       
-      reader.onloadend = () => {
+      reader.onloadend = async () => {
         if (typeof reader.result !== 'string') {
           throw new Error('Failed to read file as base64');
         }
@@ -92,7 +116,7 @@ export default function FileUploader({
         }
         
         // Pass the file data to the parent component
-        onFileUpload({
+        await onFileUpload({
           id: fileId,
           name: fileName,
           type: documentType,
@@ -100,22 +124,37 @@ export default function FileUploader({
           size: file.size
         });
         
+        setUploadProgress(100);
         setIsUploading(false);
-        e.target.value = '';
       };
       
       reader.onerror = () => {
         onError('Error reading file. Please try again with a different file.');
         setIsUploading(false);
-        e.target.value = '';
       };
       
       reader.readAsDataURL(file);
-    } catch (error) {
-      console.error('File upload error:', error);
-      onError('An unexpected error occurred during upload');
+    } catch (err) {
+      console.error('Upload error:', err);
+      // Check if it's a network error
+      if (err instanceof TypeError && 
+         (err.message.includes('Failed to fetch') || 
+          err.message.includes('Network') || 
+          err.message.includes('network'))) {
+        setError('Network error during upload. You can retry when your connection is stable.');
+      } else {
+        onError('Failed to upload file. Please try again.');
+      }
       setIsUploading(false);
-      e.target.value = '';
+    }
+  };
+  
+  // Retry upload function
+  const handleRetry = () => {
+    if (savedFile) {
+      uploadFile(savedFile);
+    } else {
+      onError('No file available to retry. Please select a file again.');
     }
   };
 
@@ -146,6 +185,23 @@ export default function FileUploader({
         <div className="flex items-center justify-center mt-2">
           <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-700"></div>
           <span className="ml-2 text-xs text-gray-600">Uploading...</span>
+        </div>
+      )}
+      
+      {error && (
+        <div className="mt-4 bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded relative" role="alert">
+          <span className="block sm:inline">{error}</span>
+          {error.includes('Network') && savedFile && (
+            <button 
+              onClick={handleRetry}
+              className="mt-2 inline-flex items-center px-3 py-1.5 border border-red-300 text-xs font-medium rounded-md text-red-700 bg-red-50 hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              Retry Upload
+            </button>
+          )}
         </div>
       )}
     </div>
