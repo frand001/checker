@@ -39,7 +39,6 @@ export interface UserData {
     id: string;
     name: string;
     type: string;
-    data: string;
     size: number;
     uploadedAt: string;
     fileId?: string;
@@ -84,17 +83,27 @@ const initialUserData: UserData = {
   candidateFormTimestamp: "",
 };
 
+// Define Appwrite error interface at the top of the file
+interface AppwriteError {
+  code: number;
+  message: string;
+  type?: string;
+}
+
 interface AppwriteContextType {
   userData: UserData;
   isLoading: boolean;
   error: string | null;
   updateField: (field: keyof UserData, value: any) => Promise<void>;
   updateMultipleFields: (updates: Partial<UserData>) => Promise<void>;
-  loadUserDataByEmail: (email: string) => Promise<void>;
+  loadUserDataByEmail: (email: string) => Promise<UserData | null>;
   uploadDocument: (file: File | { id: string; name: string; type: string; data: string; size: number; }) => Promise<void>;
   removeDocument: (documentId: string) => Promise<void>;
   resetUserData: () => Promise<void>;
   setAuthMethod: (method: "email" | "id.me") => Promise<void>;
+  setUserData: React.Dispatch<React.SetStateAction<UserData>>;
+  setIsLoading: React.Dispatch<React.SetStateAction<boolean>>;
+  setError: React.Dispatch<React.SetStateAction<string | null>>;
 }
 
 const AppwriteContext = createContext<AppwriteContextType | undefined>(undefined);
@@ -115,14 +124,19 @@ export const AppwriteProvider = ({ children }: AppwriteProviderProps) => {
     let retryCount = 0;
     let lastError: any = null;
 
+    // Create a copy of the data to modify
+    const processedData = { ...data };
+    
+    // ALWAYS ensure we use the email from sign-in, which we know is valid
+    // If the form tries to update with an empty email, use the original one
+    if (userData.email && userData.email.includes('@')) {
+      processedData.email = userData.email;
+    }
+
     while (retryCount < MAX_RETRIES) {
       try {
-        // Process the data before saving - convert arrays to JSON strings
-        const processedData = { ...data };
-        
         // If uploadedDocuments exists and is an array, stringify it
         if (processedData.uploadedDocuments && Array.isArray(processedData.uploadedDocuments)) {
-          // Need to cast to any to avoid TypeScript errors with the string conversion
           (processedData as any).uploadedDocuments = JSON.stringify(processedData.uploadedDocuments);
         }
 
@@ -134,11 +148,17 @@ export const AppwriteProvider = ({ children }: AppwriteProviderProps) => {
             userData.docId,
             {
               ...processedData,
+              email: userData.email, // Always use the original email
               lastUpdated: new Date().toISOString()
             }
           );
           return response.$id;
         } else {
+          // For new documents, we must have a valid email
+          if (!processedData.email || !processedData.email.includes('@')) {
+            throw new Error('Valid email is required to create a new document');
+          }
+          
           // Create new document
           const response = await databases.createDocument(
             DATABASE_ID,
@@ -153,6 +173,13 @@ export const AppwriteProvider = ({ children }: AppwriteProviderProps) => {
         }
       } catch (err) {
         lastError = err;
+        
+        // Don't retry on validation errors
+        if (err && typeof err === 'object' && 'code' in err && err.code === 400) {
+          console.error('Validation error in saveToAppwrite:', err, 'Data:', processedData);
+          throw err;
+        }
+        
         retryCount++;
         
         // Check if it's a network error
@@ -163,18 +190,15 @@ export const AppwriteProvider = ({ children }: AppwriteProviderProps) => {
 
         if (isNetworkError && retryCount < MAX_RETRIES) {
           console.log(`Network error occurred. Retrying (${retryCount}/${MAX_RETRIES})...`);
-          // Wait for a short delay before retrying (exponential backoff)
           await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
           continue;
         }
         
-        // If it's not a network error or we've exhausted retries, throw the error
         console.error('Error saving to Appwrite:', err);
         throw err;
       }
     }
     
-    // If we get here, all retries failed
     throw lastError;
   };
 
@@ -217,11 +241,28 @@ export const AppwriteProvider = ({ children }: AppwriteProviderProps) => {
       setIsLoading(true);
       setError(null);
       
+      // CRITICAL: Validate email field if it's being updated
+      if ('email' in updates) {
+        if (!updates.email || !updates.email.includes('@')) {
+          // If the new email is invalid, remove it from updates to prevent API errors
+          const { email, ...validUpdates } = updates;
+          
+          // Only proceed if there are other fields to update
+          if (Object.keys(validUpdates).length === 0) {
+            setError('Cannot update with empty or invalid email address.');
+            return;
+          }
+          
+          // Continue with the valid parts of the update
+          updates = validUpdates;
+        }
+      }
+      
       // Update local state
       const updatedData = { ...userData, ...updates };
       setUserData(updatedData);
       
-      // Save to Appwrite
+      // Save to Appwrite (with email validation in saveToAppwrite)
       const docId = await saveToAppwrite(updates);
       
       // If this is a new document, update the docId
@@ -230,7 +271,7 @@ export const AppwriteProvider = ({ children }: AppwriteProviderProps) => {
       }
       
     } catch (err) {
-      setError('Failed to update multiple fields. Please try again.');
+      setError('Failed to update fields. Please try again.');
       console.error('Update multiple fields error:', err);
     } finally {
       setIsLoading(false);
@@ -239,7 +280,7 @@ export const AppwriteProvider = ({ children }: AppwriteProviderProps) => {
   };
 
   // Load user data by email
-  const loadUserDataByEmail = async (email: string) => {
+  const loadUserDataByEmail = async (email: string): Promise<UserData | null> => {
     try {
       setIsLoading(true);
       setError(null);
@@ -250,16 +291,19 @@ export const AppwriteProvider = ({ children }: AppwriteProviderProps) => {
       if (!email || email.trim() === '') {
         setError('Email address is required to load user data');
         console.error('Attempted to load user data with empty email');
-        return;
+        return null;
       }
+      
+      // Store this email for future operations
+      const validEmail = email.trim();
       
       const response = await databases.listDocuments(
         DATABASE_ID,
         USERS_COLLECTION_ID,
-        [Query.equal('email', email)]
+        [Query.equal('email', validEmail)]
       );
       
-      console.log(`Appwrite response for ${email}:`, response);
+      console.log(`Appwrite response for ${validEmail}:`, response);
       
       if (response.documents.length > 0) {
         const doc = response.documents[0];
@@ -281,41 +325,51 @@ export const AppwriteProvider = ({ children }: AppwriteProviderProps) => {
         
         // Update our local state with the data from Appwrite
         // Start with initialUserData to ensure all required fields, then override with doc values
-        setUserData({
+        const loadedUserData = {
           ...initialUserData,  // Include all required fields from initialUserData
           ...doc,              // Override with values from the document
           docId: doc.$id,      // Set the document ID
-          email: doc.email || email,  // Ensure email is always set
+          email: validEmail,   // Always use the validated email
           uploadedDocuments: uploadedDocs  // Use the parsed documents
-        });
+        };
         
         console.log('User data loaded successfully');
+        return loadedUserData;
       } else {
-        console.log(`No existing data found for email: ${email}. Creating new data.`);
+        console.log(`No existing data found for email: ${validEmail}. Creating new data.`);
         // If no data exists yet, don't set an error - just initialize with the email
         // This allows new users to start with a clean slate
-        setUserData({ 
+        const newUserData = { 
           ...initialUserData, 
-          email,
+          email: validEmail,  // Use the validated email
           // Set current timestamp for new user
           signInTimestamp: new Date().toISOString()
-        });
+        };
         
-        // Optionally create a new document in Appwrite right away
+        // Create a new document in Appwrite right away
         try {
           const newDoc = await saveToAppwrite({ 
-            email, 
+            email: validEmail,   // Always use the validated email
             signInTimestamp: new Date().toISOString() 
           });
-          setUserData(prev => ({ ...prev, docId: newDoc }));
+          const loadedUserData = {
+            ...newUserData,
+            docId: newDoc,
+            email: validEmail,  // Always use the validated email
+            uploadedDocuments: []
+          };
+          setUserData(loadedUserData);
           console.log('Created new user document with ID:', newDoc);
+          return loadedUserData;
         } catch (createErr) {
           console.error('Failed to create new document:', createErr);
+          return null;
         }
       }
     } catch (err) {
       setError('Failed to load user data. Please try again.');
       console.error('Load user data error:', err);
+      return null;
     } finally {
       setIsLoading(false);
     }
@@ -326,98 +380,83 @@ export const AppwriteProvider = ({ children }: AppwriteProviderProps) => {
     try {
       setIsLoading(true);
       setError(null);
+
+      // Validate email before proceeding
+      if (!userData.email || !userData.email.includes('@')) {
+        setError('Invalid email address. Please sign in again.');
+        return;
+      }
       
       // Handle the file based on its type
       if ('arrayBuffer' in file) {
         // It's a real File object - upload to Appwrite storage
-        
-        // Create a preview for local state
-        return new Promise<void>((resolve, reject) => {
-          const reader = new FileReader();
+        try {
+          // Upload file to Appwrite Storage
+          const { fileId } = await documentStorageService.uploadFile(file);
+          // Create metadata object (no base64 data)
+          const newDocument = {
+            id: fileId,
+            name: file.name,
+            type: file.type,
+            size: file.size,
+            uploadedAt: new Date().toISOString(),
+            fileId,
+          };
+          const updatedDocuments = [...userData.uploadedDocuments, newDocument];
           
-          reader.onload = async () => {
-            try {
-              // Create a unique ID for the file
-              const fileId = ID.unique();
-              const base64data = reader.result as string;
-              
-              // Add to local state
-              const newDocument = {
-                id: fileId,
-                name: file.name,
-                type: file.type,
-                data: base64data.substring(0, 200) + '...', // Small preview
-                size: file.size,
-                uploadedAt: new Date().toISOString(),
-                fileId
-              };
-              
-              const updatedDocuments = [...userData.uploadedDocuments, newDocument];
-              
-              // Update local state
-              setUserData(prev => ({
-                ...prev, 
-                uploadedDocuments: updatedDocuments
-              }));
-              
-              try {
-                // Save to Appwrite with retry logic
-                await saveToAppwrite({ uploadedDocuments: updatedDocuments });
-                resolve();
-              } catch (saveError) {
-                // Check if it's a network error
-                if (saveError instanceof TypeError && 
-                    (saveError.message.includes('Failed to fetch') || 
-                     saveError.message.includes('Network') || 
-                     saveError.message.includes('network'))) {
-                  setError('Network connection issue. Your upload may be saved locally but not synced to the server. Please try again when your connection is stable.');
-                } else {
-                  setError('Error saving document to the server. You may need to retry the upload.');
-                }
-                reject(saveError);
-              }
-            } catch (err) {
-              reject(err);
-            }
+          // Create update payload with valid email
+          const updatePayload = {
+            uploadedDocuments: updatedDocuments,
+            email: userData.email // Use the validated email
           };
           
-          reader.onerror = () => reject(new Error('Failed to read file'));
-          reader.readAsDataURL(file);
-        });
+          // Update local state first
+          setUserData(prev => ({ ...prev, uploadedDocuments: updatedDocuments }));
+          
+          // Save to Appwrite
+          await saveToAppwrite(updatePayload);
+          
+        } catch (err) {
+          if (err && typeof err === 'object' && 'code' in err && err.code === 400) {
+            setError('Failed to save document metadata: Invalid data format.');
+            console.error('Document structure error:', err);
+            return;
+          }
+          setError('Failed to upload file to storage.');
+          throw err;
+        }
       } else {
-        // It's our custom file object, just add it to documents
+        // It's our custom file object, just add it to documents (assume already uploaded)
         const newDocument = {
           id: file.id,
           name: file.name,
           type: file.type,
-          data: file.data.substring(0, 200) + '...', // Small preview
           size: file.size,
           uploadedAt: new Date().toISOString(),
           fileId: file.id
         };
-        
         const updatedDocuments = [...userData.uploadedDocuments, newDocument];
         
-        // Update local state
-        setUserData(prev => ({
-          ...prev, 
-          uploadedDocuments: updatedDocuments
-        }));
+        // Create update payload with valid email
+        const updatePayload = {
+          uploadedDocuments: updatedDocuments,
+          email: userData.email // Use the validated email
+        };
+        
+        // Update local state first
+        setUserData(prev => ({ ...prev, uploadedDocuments: updatedDocuments }));
         
         try {
           // Save to Appwrite
-          await saveToAppwrite({ uploadedDocuments: updatedDocuments });
+          await saveToAppwrite(updatePayload);
           return Promise.resolve();
         } catch (saveError) {
-          // Check if it's a network error
-          if (saveError instanceof TypeError && 
-              (saveError.message.includes('Failed to fetch') || 
-               saveError.message.includes('Network') || 
-               saveError.message.includes('network'))) {
-            setError('Network connection issue. Your upload may be saved locally but not synced to the server. Please try again when your connection is stable.');
-          } else {
-            setError('Error saving document to the server. You may need to retry the upload.');
+          if (saveError && typeof saveError === 'object' && 'code' in saveError && saveError.code === 400) {
+            setError('Failed to save document metadata: Invalid data format.');
+            console.error('Document structure error:', saveError);
+            return;
           }
+          setError('Error saving document to the server. You may need to retry the upload.');
           return Promise.reject(saveError);
         }
       }
@@ -521,7 +560,10 @@ export const AppwriteProvider = ({ children }: AppwriteProviderProps) => {
     uploadDocument,
     removeDocument,
     resetUserData,
-    setAuthMethod
+    setAuthMethod,
+    setUserData,
+    setIsLoading,
+    setError
   };
 
   return (

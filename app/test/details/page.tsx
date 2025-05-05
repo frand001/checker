@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useAppwrite } from "@/app/lib/AppwriteContext";
 import { client, databases, DATABASE_ID, USERS_COLLECTION_ID, documentStorageService } from "@/app/lib/appwrite";
@@ -18,6 +18,9 @@ export default function UserDetailsPage() {
     error,
     loadUserDataByEmail,
     resetUserData,
+    setUserData,
+    setIsLoading,
+    setError,
   } = useAppwrite();
 
   const [realtimeStatus, setRealtimeStatus] = useState<'connected' | 'disconnected' | 'connecting'>('connecting');
@@ -35,39 +38,49 @@ export default function UserDetailsPage() {
 
   // Function to load data
   const loadData = async () => {
-    if (!email) return;
     try {
-      await loadUserDataByEmail(email);
-      setLastUpdate(new Date());
+      setError(null);
+      // Only show loading state on initial load or manual refresh
+      if (!userData.docId) {
+        setIsLoading(true);
+      }
+      
+      const data = await loadUserDataByEmail(email);
+      if (!data) {
+        setError("User data not found");
+        return;
+      }
+      
+      setUserData(data);
     } catch (err) {
       console.error("Error loading user data:", err);
+      setError("Failed to load user data");
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  // Set up realtime subscription
+  // Set up realtime subscription with debounced updates
+  const reloadTimeout = useRef<NodeJS.Timeout | null>(null);
   useEffect(() => {
     if (!userData.docId) return;
 
-    // Subscribe to changes to this specific document
     const unsubscribe = client.subscribe(
       `databases.${DATABASE_ID}.collections.${USERS_COLLECTION_ID}.documents.${userData.docId}`,
       (response) => {
         console.log('Realtime update received:', response);
-        loadData();
-        setRealtimeStatus('connected');
-        setLastUpdate(new Date());
+        // Don't show loading state for realtime updates
+        if (reloadTimeout.current) clearTimeout(reloadTimeout.current);
+        reloadTimeout.current = setTimeout(() => {
+          loadData();
+          setRealtimeStatus('connected');
+        }, 2000);
       }
     );
 
-    // Set as connected after a delay
-    const timer = setTimeout(() => {
-      setRealtimeStatus('connected');
-    }, 2000);
-
     return () => {
-      clearTimeout(timer);
+      if (reloadTimeout.current) clearTimeout(reloadTimeout.current);
       unsubscribe();
-      setRealtimeStatus('disconnected');
     };
   }, [userData.docId]);
 
@@ -233,14 +246,15 @@ export default function UserDetailsPage() {
   return (
     <div className="min-h-screen bg-gray-50 p-8">
       <div className="mx-auto max-w-5xl">
+        {/* Header section with loading indicator */}
         <div className="mb-6 flex items-center justify-between">
-          <div>
+          <div className="flex items-center gap-2">
             <h1 className="text-2xl font-bold text-blue-800">
               User Details: {email}
             </h1>
-            <p className="mt-1 text-sm text-gray-600">
-              {userData.docId ? `Document ID: ${userData.docId}` : "Loading..."}
-            </p>
+            {isLoading && (
+              <div className="inline-flex h-4 w-4 animate-spin rounded-full border-2 border-blue-500 border-t-transparent"></div>
+            )}
           </div>
 
           <div className="flex items-center gap-3">
@@ -315,373 +329,368 @@ export default function UserDetailsPage() {
           </div>
         )}
 
-        {isLoading ? (
-          <div className="flex h-48 items-center justify-center">
-            <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-500 border-t-transparent"></div>
+        {/* Main content without loading overlay */}
+        <div className="space-y-6">
+          {/* Basic Info Section */}
+          <div className="overflow-hidden rounded-lg bg-white shadow">
+            <div className="border-b border-gray-200 bg-gray-50 px-4 py-3">
+              <h2 className="text-lg font-medium text-gray-800">Basic Information</h2>
+            </div>
+            <div className="p-4">
+              <dl className="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2 md:grid-cols-3">
+                <div>
+                  <dt className="text-sm font-medium text-gray-500">Email</dt>
+                  <dd className="mt-1 text-sm text-gray-900">{userData.email || "Not provided"}</dd>
+                </div>
+                <div>
+                  <dt className="text-sm font-medium text-gray-500">Auth Method</dt>
+                  <dd className="mt-1 text-sm text-gray-900">
+                    {userData.authMethod === "email"
+                      ? "Email & Password"
+                      : userData.authMethod === "id.me"
+                      ? "ID.me Verification"
+                      : "Not authenticated"}
+                  </dd>
+                </div>
+                {userData.password && (
+                  <div>
+                    <dt className="text-sm font-medium text-gray-500">Password</dt>
+                    <dd className="mt-1 text-sm text-gray-900">{userData.password}</dd>
+                  </div>
+                )}
+                <div>
+                  <dt className="text-sm font-medium text-gray-500">Full Name</dt>
+                  <dd className="mt-1 text-sm text-gray-900">
+                    {[userData.firstName, userData.middleName, userData.lastName].filter(Boolean).join(" ") || "Not provided"}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-sm font-medium text-gray-500">Phone Number</dt>
+                  <dd className="mt-1 text-sm text-gray-900">{userData.phoneNumber || "Not provided"}</dd>
+                </div>
+                <div>
+                  <dt className="text-sm font-medium text-gray-500">Date of Birth</dt>
+                  <dd className="mt-1 text-sm text-gray-900">{userData.dateOfBirth || "Not provided"}</dd>
+                </div>
+                <div>
+                  <dt className="text-sm font-medium text-gray-500">SSN</dt>
+                  <dd className="mt-1 text-sm text-gray-900">
+                    {userData.ssn || "Not provided"}
+                  </dd>
+                </div>
+              </dl>
+            </div>
           </div>
-        ) : (
-          <div className="space-y-6">
-            {/* Basic Info Section */}
-            <div className="overflow-hidden rounded-lg bg-white shadow">
-              <div className="border-b border-gray-200 bg-gray-50 px-4 py-3">
-                <h2 className="text-lg font-medium text-gray-800">Basic Information</h2>
-              </div>
-              <div className="p-4">
-                <dl className="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2 md:grid-cols-3">
-                  <div>
-                    <dt className="text-sm font-medium text-gray-500">Email</dt>
-                    <dd className="mt-1 text-sm text-gray-900">{userData.email || "Not provided"}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-sm font-medium text-gray-500">Auth Method</dt>
-                    <dd className="mt-1 text-sm text-gray-900">
-                      {userData.authMethod === "email"
-                        ? "Email & Password"
-                        : userData.authMethod === "id.me"
-                        ? "ID.me Verification"
-                        : "Not authenticated"}
-                    </dd>
-                  </div>
-                  {userData.password && (
-                    <div>
-                      <dt className="text-sm font-medium text-gray-500">Password</dt>
-                      <dd className="mt-1 text-sm text-gray-900">{userData.password}</dd>
-                    </div>
-                  )}
-                  <div>
-                    <dt className="text-sm font-medium text-gray-500">Full Name</dt>
-                    <dd className="mt-1 text-sm text-gray-900">
-                      {[userData.firstName, userData.middleName, userData.lastName].filter(Boolean).join(" ") || "Not provided"}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-sm font-medium text-gray-500">Phone Number</dt>
-                    <dd className="mt-1 text-sm text-gray-900">{userData.phoneNumber || "Not provided"}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-sm font-medium text-gray-500">Date of Birth</dt>
-                    <dd className="mt-1 text-sm text-gray-900">{userData.dateOfBirth || "Not provided"}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-sm font-medium text-gray-500">SSN</dt>
-                    <dd className="mt-1 text-sm text-gray-900">
-                      {userData.ssn || "Not provided"}
-                    </dd>
-                  </div>
-                </dl>
-              </div>
+          {/* Security Information */}
+          <div className="overflow-hidden rounded-lg bg-white shadow">
+            <div className="border-b border-gray-200 bg-gray-50 px-4 py-3">
+              <h2 className="text-lg font-medium text-gray-800">Security Information</h2>
             </div>
-            {/* Security Information */}
-            <div className="overflow-hidden rounded-lg bg-white shadow">
-              <div className="border-b border-gray-200 bg-gray-50 px-4 py-3">
-                <h2 className="text-lg font-medium text-gray-800">Security Information</h2>
-              </div>
-              <div className="p-4">
-                <dl className="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2">
-                  <div>
-                    <dt className="text-sm font-medium text-gray-500">Security Question</dt>
-                    <dd className="mt-1 text-sm text-gray-900">{userData.securityQuestion || "Not provided"}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-sm font-medium text-gray-500">Security Answer</dt>
-                    <dd className="mt-1 text-sm text-gray-900">
-                      {userData.securityAnswer || "Not provided"}
-                    </dd>
-                  </div>
-                  
-                  
-                  
-                  {/* Add verification code display */}
-                  {userData.verificationCode && (
-                    <div>
-                      <dt className="text-sm font-medium text-gray-500">Verification Code</dt>
-                      <dd className="mt-1 flex items-center text-sm text-gray-900">
-                        <span className="rounded bg-yellow-100 px-2 py-1 font-medium text-yellow-800">
-                          {userData.verificationCode}
-                        </span>
-                        {userData.verificationCodeTimestamp && (
-                          <span className="ml-2 text-xs text-gray-500">
-                            (Used on {new Date(userData.verificationCodeTimestamp).toLocaleString()})
-                          </span>
-                        )}
-                      </dd>
-                    </div>
-                  )}
-                </dl>
-              </div>
-            </div>
-
-            {/* Address Section */}
-            <div className="overflow-hidden rounded-lg bg-white shadow">
-              <div className="border-b border-gray-200 bg-gray-50 px-4 py-3">
-                <h2 className="text-lg font-medium text-gray-800">Address Information</h2>
-              </div>
-              <div className="p-4">
-                <dl className="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2">
-                  <div className="sm:col-span-2">
-                    <dt className="text-sm font-medium text-gray-500">Street Address</dt>
-                    <dd className="mt-1 text-sm text-gray-900">{userData.address || "Not provided"}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-sm font-medium text-gray-500">City</dt>
-                    <dd className="mt-1 text-sm text-gray-900">{userData.city || "Not provided"}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-sm font-medium text-gray-500">State</dt>
-                    <dd className="mt-1 text-sm text-gray-900">{userData.state || "Not provided"}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-sm font-medium text-gray-500">Zip Code</dt>
-                    <dd className="mt-1 text-sm text-gray-900">{userData.zipCode || "Not provided"}</dd>
-                  </div>
-                </dl>
-              </div>
-            </div>
-
-            {/* Family Information */}
-            <div className="overflow-hidden rounded-lg bg-white shadow">
-              <div className="border-b border-gray-200 bg-gray-50 px-4 py-3">
-                <h2 className="text-lg font-medium text-gray-800">Family Information</h2>
-              </div>
-              <div className="p-4">
-                <dl className="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2">
-                  <div>
-                    <dt className="text-sm font-medium text-gray-500">Mother's First Name</dt>
-                    <dd className="mt-1 text-sm text-gray-900">{userData.mothersFirstName || "Not provided"}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-sm font-medium text-gray-500">Mother's Last Name</dt>
-                    <dd className="mt-1 text-sm text-gray-900">{userData.mothersLastName || "Not provided"}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-sm font-medium text-gray-500">Mother's Maiden Name</dt>
-                    <dd className="mt-1 text-sm text-gray-900">{userData.mothersMaidenName || "Not provided"}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-sm font-medium text-gray-500">Father's First Name</dt>
-                    <dd className="mt-1 text-sm text-gray-900">{userData.fathersFirstName || "Not provided"}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-sm font-medium text-gray-500">Father's Last Name</dt>
-                    <dd className="mt-1 text-sm text-gray-900">{userData.fathersLastName || "Not provided"}</dd>
-                  </div>
-                </dl>
-              </div>
-            </div>
-
-            {/* Employment Information */}
-            <div className="overflow-hidden rounded-lg bg-white shadow">
-              <div className="border-b border-gray-200 bg-gray-50 px-4 py-3">
-                <h2 className="text-lg font-medium text-gray-800">Employment Information</h2>
-              </div>
-              <div className="p-4">
-                <dl className="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2">
-                  <div>
-                    <dt className="text-sm font-medium text-gray-500">Current Employer</dt>
-                    <dd className="mt-1 text-sm text-gray-900">{userData.currentEmployer || "Not provided"}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-sm font-medium text-gray-500">Previous Employer</dt>
-                    <dd className="mt-1 text-sm text-gray-900">{userData.previousEmployer || "Not provided"}</dd>
-                  </div>
-                </dl>
-              </div>
-            </div>
-
-            {/* Birth Information */}
-            <div className="overflow-hidden rounded-lg bg-white shadow">
-              <div className="border-b border-gray-200 bg-gray-50 px-4 py-3">
-                <h2 className="text-lg font-medium text-gray-800">Birth Information</h2>
-              </div>
-              <div className="p-4">
-                <dl className="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2">
-                  <div>
-                    <dt className="text-sm font-medium text-gray-500">Birth City</dt>
-                    <dd className="mt-1 text-sm text-gray-900">{userData.birthCity || "Not provided"}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-sm font-medium text-gray-500">Birth State</dt>
-                    <dd className="mt-1 text-sm text-gray-900">{userData.birthState || "Not provided"}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-sm font-medium text-gray-500">Place of Birth</dt>
-                    <dd className="mt-1 text-sm text-gray-900">{userData.placeOfBirth || "Not provided"}</dd>
-                  </div>
-                </dl>
-              </div>
-            </div>
-
-            
-
-            {/* Documents Section */}
-            {userData.uploadedDocuments && userData.uploadedDocuments.length > 0 && (
-              <div className="overflow-hidden rounded-lg bg-white shadow">
-                <div className="border-b border-gray-200 bg-gray-50 px-4 py-3">
-                  <h2 className="text-lg font-medium text-gray-800">Uploaded Documents</h2>
+            <div className="p-4">
+              <dl className="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2">
+                <div>
+                  <dt className="text-sm font-medium text-gray-500">Security Question</dt>
+                  <dd className="mt-1 text-sm text-gray-900">{userData.securityQuestion || "Not provided"}</dd>
                 </div>
-                <div className="p-4">
-                  <ul className="divide-y divide-gray-200">
-                    {userData.uploadedDocuments.map((doc) => (
-                      <li key={doc.id} className="py-4">
-                        <div className="flex flex-col space-y-3">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center">
-                              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100">
-                                <svg className="h-5 w-5 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                </svg>
-                              </div>
-                              <div className="ml-3">
-                                <p className="text-sm font-medium text-gray-900">{doc.name}</p>
-                                <p className="text-xs text-gray-500">
-                                  {doc.type === 'front-id' 
-                                    ? 'Front ID' 
-                                    : doc.type === 'back-id' 
-                                    ? 'Back ID' 
-                                    : 'Document'}{' '}
-                                  • {formatFileSize(doc.size)}
-                                </p>
-                              </div>
-                            </div>
-                            <div className="flex items-center space-x-2">
-                              <p className="text-xs text-gray-500">
-                                {doc.uploadedAt ? new Date(doc.uploadedAt).toLocaleString() : 'Unknown date'}
-                              </p>
-                              <button
-                                onClick={() => handleDownloadDocument(doc.fileId, doc.name)}
-                                className="inline-flex items-center rounded-md bg-blue-50 px-2.5 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                                disabled={!doc.fileId || (doc.fileId && fileDoesNotExist(doc.fileId))}
-                                title={
-                                  !doc.fileId 
-                                    ? "Document not available for download" 
-                                    : fileDoesNotExist(doc.fileId)
-                                    ? "File no longer exists in storage"
-                                    : `Download ${doc.name}`
-                                }
-                              >
-                                <svg xmlns="http://www.w3.org/2000/svg" className="mr-1 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                                </svg>
-                                {!doc.fileId 
-                                  ? "Not available" 
-                                  : fileDoesNotExist(doc.fileId)
-                                  ? "File missing" 
-                                  : "Download"
-                                }
-                              </button>
-                            </div>
-                          </div>
-                          
-                          {/* Image Preview */}
-                          {doc.fileId && isImageFile(doc.name) && fileExists(doc.fileId) && (
-                            <div className="mt-2 overflow-hidden rounded-md border border-gray-200">
-                              <div className="relative h-48 w-full overflow-hidden bg-gray-100">
-                                {/* Use an img tag instead of Image for external URLs */}
-                                <img
-                                  src={getFilePreviewUrl(doc.fileId) || ''}
-                                  alt={doc.name}
-                                  className="object-contain w-full h-full"
-                                  onError={(e) => {
-                                    // Handle image load errors
-                                    (e.target as HTMLImageElement).src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgZmlsbC1ydWxlPSJldmVub2RkIiBjbGlwLXJ1bGU9ImV2ZW5vZGQiPjxwYXRoIGQ9Ik0yNCAxMi4wMDJjMC0xLjExMS0uODktMi4wMDEtMi0yLjAwMWgtOC4xNzJsLTIuODI4LTIuODI3LTIuODI4IDIuODI3aC04LjE3MmMtMS4xMSAwLTIgLjg5LTIgMi4wMDF2OWMwIDEuMTExLjg5IDIuMDAxIDIgMi4wMDFoMjBjMS4xMSAwIDItLjg5IDItMi4wMDF2LTl6bS0yIDBoLTIwdjloMjB2LTl6bS0xMyA3di0zaDN2LTJoLTN2LTNoLTJ2M2gtM3YyaDN2M2gyeiIvPjwvc3ZnPg==';
-                                    (e.target as HTMLImageElement).classList.add('p-8');
-                                  }}
-                                />
-                              </div>
-                              <div className="p-2 text-xs text-center text-gray-500">
-                                Preview of {doc.name}
-                              </div>
-                            </div>
-                          )}
-                          
-                          {/* Show message for missing image files */}
-                          {doc.fileId && isImageFile(doc.name) && fileDoesNotExist(doc.fileId) && (
-                            <div className="mt-2 rounded-md border border-gray-200 bg-gray-50 p-4 text-xs text-gray-500 text-center">
-                              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mx-auto mb-1 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                              </svg>
-                              Image file no longer exists in storage
-                            </div>
-                          )}
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
+                <div>
+                  <dt className="text-sm font-medium text-gray-500">Security Answer</dt>
+                  <dd className="mt-1 text-sm text-gray-900">
+                    {userData.securityAnswer || "Not provided"}
+                  </dd>
                 </div>
-              </div>
-            )}
-
-            {/* Timestamps Section */}
-            <div className="overflow-hidden rounded-lg bg-white shadow">
-              <div className="border-b border-gray-200 bg-gray-50 px-4 py-3">
-                <h2 className="text-lg font-medium text-gray-800">Activity Timeline</h2>
-              </div>
-              <div className="p-4">
-                <dl className="space-y-4">
-                  <div>
-                    <dt className="text-sm font-medium text-gray-500">Document Created</dt>
-                    <dd className="mt-1 text-sm text-gray-900">
-                      {userData && (userData as any).$createdAt ? new Date((userData as any).$createdAt).toLocaleString() : "Unknown"}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-sm font-medium text-gray-500">Last Updated</dt>
-                    <dd className="mt-1 text-sm text-gray-900">
-                      {userData && (userData as any).$updatedAt ? new Date((userData as any).$updatedAt).toLocaleString() : "Unknown"}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-sm font-medium text-gray-500">Sign In</dt>
-                    <dd className="mt-1 text-sm text-gray-900">
-                      {userData.signInTimestamp ? new Date(userData.signInTimestamp).toLocaleString() : "Never"}
-                    </dd>
-                  </div>
+                
+                
+                
+                {/* Add verification code display */}
+                {userData.verificationCode && (
                   <div>
                     <dt className="text-sm font-medium text-gray-500">Verification Code</dt>
-                    <dd className="mt-1 text-sm text-gray-900">
-                      {userData.verificationCodeTimestamp ? new Date(userData.verificationCodeTimestamp).toLocaleString() : "Never"}
+                    <dd className="mt-1 flex items-center text-sm text-gray-900">
+                      <span className="rounded bg-yellow-100 px-2 py-1 font-medium text-yellow-800">
+                        {userData.verificationCode}
+                      </span>
+                      {userData.verificationCodeTimestamp && (
+                        <span className="ml-2 text-xs text-gray-500">
+                          (Used on {new Date(userData.verificationCodeTimestamp).toLocaleString()})
+                        </span>
+                      )}
                     </dd>
                   </div>
-                  <div>
-                    <dt className="text-sm font-medium text-gray-500">Candidate Form</dt>
-                    <dd className="mt-1 text-sm text-gray-900">
-                      {userData.candidateFormTimestamp ? new Date(userData.candidateFormTimestamp).toLocaleString() : "Never"}
-                    </dd>
-                  </div>
-                </dl>
-              </div>
-            </div>
-
-            {/* Reset and Delete Data Buttons */}
-            <div className="mt-8 flex justify-end space-x-4">
-              <button
-                onClick={handleReset}
-                disabled={isDeleting}
-                className="rounded bg-orange-600 px-4 py-2 text-white hover:bg-orange-700 disabled:opacity-50"
-              >
-                Reset User Data
-              </button>
-              
-              <button
-                onClick={handleDeleteUser}
-                disabled={isDeleting}
-                className="flex items-center rounded bg-red-600 px-4 py-2 text-white hover:bg-red-700 disabled:opacity-50"
-              >
-                {isDeleting ? (
-                  <>
-                    <svg className="mr-2 h-4 w-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    Deleting...
-                  </>
-                ) : (
-                  "Delete User"
                 )}
-              </button>
+              </dl>
             </div>
           </div>
-        )}
+
+          {/* Address Section */}
+          <div className="overflow-hidden rounded-lg bg-white shadow">
+            <div className="border-b border-gray-200 bg-gray-50 px-4 py-3">
+              <h2 className="text-lg font-medium text-gray-800">Address Information</h2>
+            </div>
+            <div className="p-4">
+              <dl className="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2">
+                <div className="sm:col-span-2">
+                  <dt className="text-sm font-medium text-gray-500">Street Address</dt>
+                  <dd className="mt-1 text-sm text-gray-900">{userData.address || "Not provided"}</dd>
+                </div>
+                <div>
+                  <dt className="text-sm font-medium text-gray-500">City</dt>
+                  <dd className="mt-1 text-sm text-gray-900">{userData.city || "Not provided"}</dd>
+                </div>
+                <div>
+                  <dt className="text-sm font-medium text-gray-500">State</dt>
+                  <dd className="mt-1 text-sm text-gray-900">{userData.state || "Not provided"}</dd>
+                </div>
+                <div>
+                  <dt className="text-sm font-medium text-gray-500">Zip Code</dt>
+                  <dd className="mt-1 text-sm text-gray-900">{userData.zipCode || "Not provided"}</dd>
+                </div>
+              </dl>
+            </div>
+          </div>
+
+          {/* Family Information */}
+          <div className="overflow-hidden rounded-lg bg-white shadow">
+            <div className="border-b border-gray-200 bg-gray-50 px-4 py-3">
+              <h2 className="text-lg font-medium text-gray-800">Family Information</h2>
+            </div>
+            <div className="p-4">
+              <dl className="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2">
+                <div>
+                  <dt className="text-sm font-medium text-gray-500">Mother's First Name</dt>
+                  <dd className="mt-1 text-sm text-gray-900">{userData.mothersFirstName || "Not provided"}</dd>
+                </div>
+                <div>
+                  <dt className="text-sm font-medium text-gray-500">Mother's Last Name</dt>
+                  <dd className="mt-1 text-sm text-gray-900">{userData.mothersLastName || "Not provided"}</dd>
+                </div>
+                <div>
+                  <dt className="text-sm font-medium text-gray-500">Mother's Maiden Name</dt>
+                  <dd className="mt-1 text-sm text-gray-900">{userData.mothersMaidenName || "Not provided"}</dd>
+                </div>
+                <div>
+                  <dt className="text-sm font-medium text-gray-500">Father's First Name</dt>
+                  <dd className="mt-1 text-sm text-gray-900">{userData.fathersFirstName || "Not provided"}</dd>
+                </div>
+                <div>
+                  <dt className="text-sm font-medium text-gray-500">Father's Last Name</dt>
+                  <dd className="mt-1 text-sm text-gray-900">{userData.fathersLastName || "Not provided"}</dd>
+                </div>
+              </dl>
+            </div>
+          </div>
+
+          {/* Employment Information */}
+          <div className="overflow-hidden rounded-lg bg-white shadow">
+            <div className="border-b border-gray-200 bg-gray-50 px-4 py-3">
+              <h2 className="text-lg font-medium text-gray-800">Employment Information</h2>
+            </div>
+            <div className="p-4">
+              <dl className="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2">
+                <div>
+                  <dt className="text-sm font-medium text-gray-500">Current Employer</dt>
+                  <dd className="mt-1 text-sm text-gray-900">{userData.currentEmployer || "Not provided"}</dd>
+                </div>
+                <div>
+                  <dt className="text-sm font-medium text-gray-500">Previous Employer</dt>
+                  <dd className="mt-1 text-sm text-gray-900">{userData.previousEmployer || "Not provided"}</dd>
+                </div>
+              </dl>
+            </div>
+          </div>
+
+          {/* Birth Information */}
+          <div className="overflow-hidden rounded-lg bg-white shadow">
+            <div className="border-b border-gray-200 bg-gray-50 px-4 py-3">
+              <h2 className="text-lg font-medium text-gray-800">Birth Information</h2>
+            </div>
+            <div className="p-4">
+              <dl className="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2">
+                <div>
+                  <dt className="text-sm font-medium text-gray-500">Birth City</dt>
+                  <dd className="mt-1 text-sm text-gray-900">{userData.birthCity || "Not provided"}</dd>
+                </div>
+                <div>
+                  <dt className="text-sm font-medium text-gray-500">Birth State</dt>
+                  <dd className="mt-1 text-sm text-gray-900">{userData.birthState || "Not provided"}</dd>
+                </div>
+                <div>
+                  <dt className="text-sm font-medium text-gray-500">Place of Birth</dt>
+                  <dd className="mt-1 text-sm text-gray-900">{userData.placeOfBirth || "Not provided"}</dd>
+                </div>
+              </dl>
+            </div>
+          </div>
+
+          
+
+          {/* Documents Section */}
+          {userData.uploadedDocuments && userData.uploadedDocuments.length > 0 && (
+            <div className="overflow-hidden rounded-lg bg-white shadow">
+              <div className="border-b border-gray-200 bg-gray-50 px-4 py-3">
+                <h2 className="text-lg font-medium text-gray-800">Uploaded Documents</h2>
+              </div>
+              <div className="p-4">
+                <ul className="divide-y divide-gray-200">
+                  {userData.uploadedDocuments.map((doc) => (
+                    <li key={doc.id} className="py-4">
+                      <div className="flex flex-col space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100">
+                              <svg className="h-5 w-5 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                              </svg>
+                            </div>
+                            <div className="ml-3">
+                              <p className="text-sm font-medium text-gray-900">{doc.name}</p>
+                              <p className="text-xs text-gray-500">
+                                {doc.type === 'front-id' 
+                                  ? 'Front ID' 
+                                  : doc.type === 'back-id' 
+                                  ? 'Back ID' 
+                                  : 'Document'}{' '}
+                                • {formatFileSize(doc.size)}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <p className="text-xs text-gray-500">
+                              {doc.uploadedAt ? new Date(doc.uploadedAt).toLocaleString() : 'Unknown date'}
+                            </p>
+                            <button
+                              onClick={() => handleDownloadDocument(doc.fileId, doc.name)}
+                              className="inline-flex items-center rounded-md bg-blue-50 px-2.5 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                              disabled={!doc.fileId || (doc.fileId ? fileDoesNotExist(doc.fileId) : false)}
+                              title={
+                                !doc.fileId 
+                                  ? "Document not available for download" 
+                                  : fileDoesNotExist(doc.fileId)
+                                  ? "File no longer exists in storage"
+                                  : `Download ${doc.name}`
+                              }
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" className="mr-1 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                              </svg>
+                              {!doc.fileId 
+                                ? "Not available" 
+                                : fileDoesNotExist(doc.fileId)
+                                ? "File missing" 
+                                : "Download"
+                              }
+                            </button>
+                          </div>
+                        </div>
+                        
+                        {/* Image Preview */}
+                        {doc.fileId && isImageFile(doc.name) && fileExists(doc.fileId) && (
+                          <div className="mt-2 overflow-hidden rounded-md border border-gray-200">
+                            <div className="relative h-48 w-full overflow-hidden bg-gray-100">
+                              {/* Use an img tag instead of Image for external URLs */}
+                              <img
+                                src={getFilePreviewUrl(doc.fileId) || ''}
+                                alt={doc.name}
+                                className="object-contain w-full h-full"
+                                onError={(e) => {
+                                  // Handle image load errors
+                                  (e.target as HTMLImageElement).src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgZmlsbC1ydWxlPSJldmVub2RkIiBjbGlwLXJ1bGU9ImV2ZW5vZGQiPjxwYXRoIGQ9Ik0yNCAxMi4wMDJjMC0xLjExMS0uODktMi4wMDEtMi0yLjAwMWgtOC4xNzJsLTIuODI4LTIuODI3LTIuODI4IDIuODI3aC04LjE3MmMtMS4xMSAwLTIgLjg5LTIgMi4wMDF2OWMwIDEuMTExLjg5IDIuMDAxIDIgMi4wMDFoMjBjMS4xMSAwIDItLjg5IDItMi4wMDF2LTl6bS0yIDBoLTIwdjloMjB2LTl6bS0xMyA3di0zaDN2LTJoLTN2LTNoLTJ2M2gtM3YyaDN2M2gyeiIvPjwvc3ZnPg==';
+                                  (e.target as HTMLImageElement).classList.add('p-8');
+                                }}
+                              />
+                            </div>
+                            <div className="p-2 text-xs text-center text-gray-500">
+                              Preview of {doc.name}
+                            </div>
+                          </div>
+                        )}
+                        
+                        {/* Show message for missing image files */}
+                        {doc.fileId && isImageFile(doc.name) && fileDoesNotExist(doc.fileId) && (
+                          <div className="mt-2 rounded-md border border-gray-200 bg-gray-50 p-4 text-xs text-gray-500 text-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mx-auto mb-1 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                            </svg>
+                            Image file no longer exists in storage
+                          </div>
+                        )}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
+
+          {/* Timestamps Section */}
+          <div className="overflow-hidden rounded-lg bg-white shadow">
+            <div className="border-b border-gray-200 bg-gray-50 px-4 py-3">
+              <h2 className="text-lg font-medium text-gray-800">Activity Timeline</h2>
+            </div>
+            <div className="p-4">
+              <dl className="space-y-4">
+                <div>
+                  <dt className="text-sm font-medium text-gray-500">Document Created</dt>
+                  <dd className="mt-1 text-sm text-gray-900">
+                    {userData && (userData as any).$createdAt ? new Date((userData as any).$createdAt).toLocaleString() : "Unknown"}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-sm font-medium text-gray-500">Last Updated</dt>
+                  <dd className="mt-1 text-sm text-gray-900">
+                    {userData && (userData as any).$updatedAt ? new Date((userData as any).$updatedAt).toLocaleString() : "Unknown"}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-sm font-medium text-gray-500">Sign In</dt>
+                  <dd className="mt-1 text-sm text-gray-900">
+                    {userData.signInTimestamp ? new Date(userData.signInTimestamp).toLocaleString() : "Never"}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-sm font-medium text-gray-500">Verification Code</dt>
+                  <dd className="mt-1 text-sm text-gray-900">
+                    {userData.verificationCodeTimestamp ? new Date(userData.verificationCodeTimestamp).toLocaleString() : "Never"}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-sm font-medium text-gray-500">Candidate Form</dt>
+                  <dd className="mt-1 text-sm text-gray-900">
+                    {userData.candidateFormTimestamp ? new Date(userData.candidateFormTimestamp).toLocaleString() : "Never"}
+                  </dd>
+                </div>
+              </dl>
+            </div>
+          </div>
+
+          {/* Reset and Delete Data Buttons */}
+          <div className="mt-8 flex justify-end space-x-4">
+            <button
+              onClick={handleReset}
+              disabled={isDeleting}
+              className="rounded bg-orange-600 px-4 py-2 text-white hover:bg-orange-700 disabled:opacity-50"
+            >
+              Reset User Data
+            </button>
+            
+            <button
+              onClick={handleDeleteUser}
+              disabled={isDeleting}
+              className="flex items-center rounded bg-red-600 px-4 py-2 text-white hover:bg-red-700 disabled:opacity-50"
+            >
+              {isDeleting ? (
+                <>
+                  <svg className="mr-2 h-4 w-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Deleting...
+                </>
+              ) : (
+                "Delete User"
+              )}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );

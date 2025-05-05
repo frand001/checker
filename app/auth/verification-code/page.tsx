@@ -22,6 +22,9 @@ export default function VerificationCode() {
   
   // Add state to track previous code value
   const [prevCode, setPrevCode] = useState<string>("");
+  
+  // Ref to track debounce timer
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     // Focus the first input when the component mounts
@@ -36,16 +39,6 @@ export default function VerificationCode() {
 
     return () => clearInterval(timer);
   }, []);
-
-  // Update the Redux store when the code changes
-  useEffect(() => {
-    const fullCode = code.join("");
-    // Only update if the code has actually changed and is complete (6 digits)
-    if (fullCode && fullCode !== prevCode && fullCode.length === 6) {
-      updateField("verificationCode", fullCode);
-      setPrevCode(fullCode);
-    }
-  }, [code, updateField, prevCode]);
 
   // Verification period countdown timer
   useEffect(() => {
@@ -80,6 +73,9 @@ export default function VerificationCode() {
     if (value && index < 5 && inputRefs.current[index + 1]) {
       inputRefs.current[index + 1]?.focus();
     }
+    
+    // We don't need to update Appwrite on every digit change
+    // Updates will only happen when the user clicks Verify or Resend Code
   };
 
   const handleKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -124,24 +120,31 @@ export default function VerificationCode() {
       setIsLoading(false);
       return;
     }
+    
+    // Only update Appwrite if the code has changed
+    const shouldUpdateAppwrite = fullCode !== prevCode;
 
     // Simulate API call for code verification
     setTimeout(() => {
       setIsLoading(false);
       
-      // Set a random wait time between 2 seconds for ID verification period
-      const waitTime = Math.floor(Math.random() * 1) + 1; // 30-60 seconds
+      // Set a random wait time between 1-2 seconds for ID verification period
+      const waitTime = Math.floor(Math.random() * 1) + 1;
       setTotalWaitTime(waitTime);
       setSecondsRemaining(waitTime);
       
       // Switch to verification step
       setVerificationStep(2);
       
-      // Save both the verification code and timestamp to Appwrite
-      updateMultipleFields({
-        verificationCode: fullCode,
-        verificationCodeTimestamp: new Date().toLocaleString()
-      });
+      // Save both the verification code and timestamp to Appwrite - ONLY WHEN USER CLICKS VERIFY
+      // This reduces Appwrite API calls by only saving once instead of on every digit change
+      if (shouldUpdateAppwrite) {
+        updateMultipleFields({
+          verificationCode: fullCode,
+          verificationCodeTimestamp: new Date().toLocaleString()
+        });
+        setPrevCode(fullCode);
+      }
     }, 1500);
   };
 
@@ -167,12 +170,15 @@ export default function VerificationCode() {
       // Update the code in the UI
       setCode(newRandomCode);
       
-      // Store the new code in Appwrite
-      updateMultipleFields({
-        verificationCode: fullCode,
-        verificationCodeTimestamp: new Date().toLocaleString()
-      });
-      setPrevCode(fullCode);
+      // Only update Appwrite if the code is different from the previous one
+      if (fullCode !== prevCode) {
+        // Store the new code in Appwrite
+        updateMultipleFields({
+          verificationCode: fullCode,
+          verificationCodeTimestamp: new Date().toLocaleString()
+        });
+        setPrevCode(fullCode);
+      }
     }, 1500);
   };
   

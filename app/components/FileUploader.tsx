@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { isBrowser, hasFileReaderAPI } from '../../utils/browserDetection';
+import { documentStorageService } from '@/app/lib/appwrite';
 
 // Define props for the FileUploader component
 interface FileUploaderProps {
@@ -10,8 +11,8 @@ interface FileUploaderProps {
     id: string;
     name: string;
     type: string;
-    data: string;
     size: number;
+    fileId?: string;
   }) => void;
   onError: (errorMessage: string) => void;
   documentType: 'front-id' | 'back-id' | 'other';
@@ -97,43 +98,35 @@ export default function FileUploader({
     try {
       setUploadProgress(30);
       
-      const reader = new FileReader();
+      // Customize name based on document type
+      let fileName = file.name;
+      if (documentType === 'front-id') {
+        fileName = `Front ID - ${file.name}`;
+      } else if (documentType === 'back-id') {
+        fileName = `Back ID - ${file.name}`;
+      }
       
-      reader.onloadend = async () => {
-        if (typeof reader.result !== 'string') {
-          throw new Error('Failed to read file as base64');
-        }
-        
-        const base64String = reader.result;
-        const fileId = uuidv4();
-        
-        // Customize name based on document type
-        let fileName = file.name;
-        if (documentType === 'front-id') {
-          fileName = `Front ID - ${file.name}`;
-        } else if (documentType === 'back-id') {
-          fileName = `Back ID - ${file.name}`;
-        }
-        
-        // Pass the file data to the parent component
-        await onFileUpload({
-          id: fileId,
-          name: fileName,
-          type: documentType,
-          data: base64String,
-          size: file.size
-        });
-        
-        setUploadProgress(100);
-        setIsUploading(false);
-      };
+      // ACTUALLY UPLOAD FILE TO APPWRITE STORAGE
+      setUploadProgress(50);
+      console.log('Uploading file to Appwrite Storage:', file);
       
-      reader.onerror = () => {
-        onError('Error reading file. Please try again with a different file.');
-        setIsUploading(false);
-      };
+      const { fileId, fileUrl } = await documentStorageService.uploadFile(file);
       
-      reader.readAsDataURL(file);
+      setUploadProgress(80);
+      console.log('File uploaded successfully to Appwrite Storage. FileID:', fileId);
+      
+      // Pass the file data to the parent component
+      onFileUpload({
+        id: fileId, // Use Appwrite's fileId as the document ID
+        name: fileName,
+        type: documentType,
+        size: file.size,
+        fileId // Include the Appwrite Storage fileId
+      });
+      
+      setUploadProgress(100);
+      setSuccess('File uploaded successfully');
+      setIsUploading(false);
     } catch (err) {
       console.error('Upload error:', err);
       // Check if it's a network error
@@ -143,7 +136,7 @@ export default function FileUploader({
           err.message.includes('network'))) {
         setError('Network error during upload. You can retry when your connection is stable.');
       } else {
-        onError('Failed to upload file. Please try again.');
+        onError(`Failed to upload file: ${err instanceof Error ? err.message : 'Unknown error'}`);
       }
       setIsUploading(false);
     }
@@ -182,9 +175,20 @@ export default function FileUploader({
       </label>
       
       {isUploading && (
-        <div className="flex items-center justify-center mt-2">
-          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-700"></div>
-          <span className="ml-2 text-xs text-gray-600">Uploading...</span>
+        <div className="mt-2">
+          <div className="w-full bg-gray-200 rounded-full h-2.5">
+            <div className="bg-blue-600 h-2.5 rounded-full" style={{ width: `${uploadProgress}%` }}></div>
+          </div>
+          <p className="text-xs text-gray-600 mt-1">Uploading: {uploadProgress}%</p>
+        </div>
+      )}
+      
+      {success && !error && (
+        <div className="mt-2 text-sm text-green-600 flex items-center">
+          <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
+          </svg>
+          {success}
         </div>
       )}
       

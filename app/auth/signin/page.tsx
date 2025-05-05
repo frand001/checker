@@ -92,7 +92,7 @@ export default function SignIn() {
           console.error('Failed to update fields:', err);
         }
       }
-    }, 1000); // Increased to 1000ms to reduce frequency
+    }, 4000); // Increased to 4000ms (4 seconds) to reduce frequency
     
     return () => {
       // Clean up the timer
@@ -139,11 +139,11 @@ export default function SignIn() {
     try {
       // Set auth method to ID.me
       await setAuthMethod("id.me");
-      
+    
       // Redirect to captcha verification
-      setTimeout(() => {
-        router.push("/auth/captcha-verification");
-      }, 1000);
+    setTimeout(() => {
+      router.push("/auth/captcha-verification");
+    }, 1000);
     } catch (error) {
       console.error('Failed to save ID.me auth data:', error);
       setError("Failed to save your data. Please try again.");

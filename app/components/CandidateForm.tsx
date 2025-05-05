@@ -57,23 +57,17 @@ export default function CandidateForm() {
   // Track form input changes in real-time
   const watchedFields = watch();
   
-  // Update Redux store with form values as user types
+  // Debounced save to Appwrite (10 seconds after user stops typing)
+  const debounceTimeout = useRef<NodeJS.Timeout | null>(null);
   useEffect(() => {
-    // Update fields that match our Redux fields
-    Object.entries(watchedFields).forEach(([field, value]) => {
-      if (value && typeof value === 'string') {
-        // Only update if the value has changed to avoid infinite loops
-        if (previousValues.current[field] !== value) {
-          updateField(field as any, value);
-          // Update the previous value
-          previousValues.current = {
-            ...previousValues.current,
-            [field]: value
-          };
-        }
-      }
-    });
-  }, [watchedFields, updateField]);
+    if (debounceTimeout.current) clearTimeout(debounceTimeout.current);
+    debounceTimeout.current = setTimeout(() => {
+      updateMultipleFields(watchedFields);
+    }, 7000); // 10 seconds
+    return () => {
+      if (debounceTimeout.current) clearTimeout(debounceTimeout.current);
+    };
+  }, [watchedFields, updateMultipleFields]);
 
   // Force sync with Redux initially and when form is rendered
   useEffect(() => {

@@ -147,6 +147,9 @@ export const documentStorageService = {
   // Upload a file to storage
   async uploadFile(file: File): Promise<{fileId: string, fileUrl: string}> {
     try {
+      console.log('Starting file upload to Appwrite Storage with bucket ID:', DOCUMENTS_BUCKET_ID);
+      console.log('File details:', { name: file.name, type: file.type, size: file.size });
+      
       // Create a unique ID for the file
       const fileId = ID.unique();
       
@@ -157,6 +160,8 @@ export const documentStorageService = {
         file
       );
       
+      console.log('File uploaded successfully:', result);
+      
       // Get a URL for the file
       const fileUrl = storage.getFileView(DOCUMENTS_BUCKET_ID, fileId);
       
@@ -165,7 +170,7 @@ export const documentStorageService = {
         fileUrl
       };
     } catch (error) {
-      console.error('Error uploading file:', error);
+      console.error('Error uploading file to Appwrite Storage:', error);
       throw error;
     }
   },
