@@ -8,7 +8,7 @@ import LoadingSpinner from "@/app/components/LoadingSpinner";
 
 export default function CaptchaVerification() {
   const router = useRouter();
-  const { userData, updateField } = useAppwrite();
+  const { userData, updateField, updateMultipleFields } = useAppwrite();
   const captchaVerified = userData.captchaVerified;
 
   const [verificationComplete, setVerificationComplete] = useState(false);
@@ -16,6 +16,7 @@ export default function CaptchaVerification() {
   const [totalWaitTime, setTotalWaitTime] = useState(0);
   const [verificationStep, setVerificationStep] = useState(1);
   const [isChecked, setIsChecked] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
 
   // Initialize the verification process
   useEffect(() => {
@@ -27,7 +28,6 @@ export default function CaptchaVerification() {
     // If user is already verified, redirect to candidate portal
     if (captchaVerified) {
       router.push("/auth/verification-code");
-
     }
   }, [captchaVerified, router]);
   
@@ -39,14 +39,22 @@ export default function CaptchaVerification() {
       }, 1000);
       
       return () => clearTimeout(timer);
-    } else if (secondsRemaining === 0 && verificationStep === 2) {
+    } else if (secondsRemaining === 0 && verificationStep === 2 && !isUpdating) {
       setVerificationComplete(true);
+      
       // Update Appwrite data with verification status and timestamp
+      // Use updateMultipleFields to batch updates into a single API call
+      setIsUpdating(true);
       const now = new Date().toISOString();
-      updateField("captchaVerified", true);
-      updateField("captchaVerifiedAt", now);
+      
+      updateMultipleFields({
+        captchaVerified: true,
+        captchaVerifiedAt: now
+      }).finally(() => {
+        setIsUpdating(false);
+      });
     }
-  }, [secondsRemaining, verificationStep, updateField]);
+  }, [secondsRemaining, verificationStep, updateMultipleFields, isUpdating]);
   
   // Format time as MM:SS
   const formatTime = useCallback((seconds: number) => {
@@ -174,8 +182,6 @@ export default function CaptchaVerification() {
               </div>
               
               <div className="space-y-4">
-                
-                
                 <div className="flex items-center justify-center space-x-2">
                   <LoadingSpinner size="sm" color="blue" text="Verifying identity..." />
                 </div>
