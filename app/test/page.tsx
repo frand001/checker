@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useAppwrite } from "@/app/lib/AppwriteContext";
 import { client, databases, DATABASE_ID, USERS_COLLECTION_ID, documentStorageService } from "@/app/lib/appwrite";
 import { Query } from "appwrite";
@@ -40,7 +40,8 @@ interface AppwriteUser {
   securityAnswer?: string;
 }
 
-export default function TestPage() {
+// Component that uses useSearchParams
+function TestContent() {
   const searchParams = useSearchParams();
   
   // App state
@@ -669,5 +670,21 @@ export default function TestPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+// Main component that wraps the content in a Suspense boundary
+export default function TestPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-600 border-r-transparent"></div>
+          <p className="mt-4 text-gray-700">Loading user data...</p>
+        </div>
+      </div>
+    }>
+      <TestContent />
+    </Suspense>
   );
 } 

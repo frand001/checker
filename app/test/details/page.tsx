@@ -1,13 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useAppwrite } from "@/app/lib/AppwriteContext";
 import { client, databases, DATABASE_ID, USERS_COLLECTION_ID, documentStorageService } from "@/app/lib/appwrite";
 import Image from "next/image";
 
-export default function UserDetailsPage() {
+// Create a wrapper component that uses the search params
+function UserDetailsContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const email = searchParams.get('email');
@@ -693,5 +694,21 @@ export default function UserDetailsPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+// Main component that wraps the content in a Suspense boundary
+export default function UserDetailsPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-600 border-r-transparent"></div>
+          <p className="mt-4 text-gray-700">Loading user details...</p>
+        </div>
+      </div>
+    }>
+      <UserDetailsContent />
+    </Suspense>
   );
 } 
