@@ -4,14 +4,19 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import Image from "next/image";
+import { useAppwrite } from "../lib/AppwriteContext";
 
 export default function Navbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [showResetModal, setShowResetModal] = useState(false);
+  const [resetSuccess, setResetSuccess] = useState(false);
   const pathname = usePathname();
 
   const isActive = (path: string) => {
     return pathname === path;
   };
+  
+  
 
   return (
     <nav className="bg-white shadow-md">
@@ -50,6 +55,7 @@ export default function Navbar() {
           </div>
           <div className="hidden sm:ml-6 sm:flex sm:items-center">
             <div className="flex space-x-4">
+              
               <Link
                 href="/auth/signin"
                 className={`rounded-md px-3 py-2 text-sm font-medium ${
@@ -134,6 +140,14 @@ export default function Navbar() {
             >
               Verification Portal
             </Link>
+            <button
+              onClick={() => setShowResetModal(true)}
+              className="w-full text-left block rounded-md px-3 py-2 text-base font-medium text-gray-700 hover:bg-gray-50 flex items-center"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+            </button>
             <Link
               href="#"
               className="block rounded-md px-3 py-2 text-base font-medium text-gray-700 hover:bg-gray-50"
@@ -169,6 +183,10 @@ export default function Navbar() {
           </div>
         </div>
       )}
+      
+     
+      
+      
     </nav>
   );
 } 

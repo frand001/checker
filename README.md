@@ -1,36 +1,106 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Redux State Management with Appwrite Backend
+
+This project demonstrates how to use Redux for state management with Appwrite as a backend storage solution.
+
+## Overview
+
+The application has:
+- Redux for client-side state management
+- Redux Persist for local storage persistence
+- Appwrite for cross-browser/device state synchronization
+- Next.js for the frontend framework
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
+
+- Node.js (v14 or later)
+- npm or yarn
+- An Appwrite account
+
+### Installation
+
+1. Clone the repository
+2. Install dependencies:
+
+```bash
+npm install
+# or
+yarn install
+```
+
+3. Install Appwrite SDK:
+
+```bash
+npm install appwrite
+# or
+yarn add appwrite
+```
+
+### Appwrite Setup
+
+Follow the instructions in `setup-appwrite.md` to set up your Appwrite backend.
+
+### Configuration
+
+Update the Appwrite client configuration in `app/lib/appwrite.ts`:
+
+```typescript
+client
+  .setEndpoint('YOUR_APPWRITE_ENDPOINT') // Replace with your Appwrite endpoint
+  .setProject('YOUR_APPWRITE_PROJECT_ID'); // Replace with your project ID
+```
+
+### Running the Application
 
 ```bash
 npm run dev
 # or
 yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Usage
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Sign-in Page
+- Enter an email and password
+- Data will be saved to both Redux and Appwrite
+- Navigate to the test page to see state persistence
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Test Page
+- View the current Redux state
+- Load data from Appwrite by email address
+- Reset data
 
-## Learn More
+## Troubleshooting
 
-To learn more about Next.js, take a look at the following resources:
+### Data Not Persisting Between Browsers
+- This is expected behavior with Redux/Redux Persist alone
+- To test cross-browser persistence:
+  1. Sign in with an email in one browser
+  2. Open the application in another browser or device
+  3. Go to the test page and use the "Load Data" function with the same email
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Appwrite Connection Issues
+- Verify your Appwrite endpoint and project ID are correct
+- Check network requests in your browser's developer tools
+- Ensure your Appwrite collection has proper permissions and attributes
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### TypeScript Errors
+If you encounter TypeScript errors related to the Appwrite client, try:
+```bash
+npm install --save-dev @types/appwrite
+# or
+yarn add --dev @types/appwrite
+```
 
-## Deploy on Vercel
+## Next Steps
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+For a production application, consider:
+1. Using Appwrite's authentication instead of storing passwords directly
+2. Setting up proper permissions and security rules
+3. Implementing more robust error handling
+4. Using environment variables for Appwrite credentials
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## License
+
+This project is licensed under the MIT License.

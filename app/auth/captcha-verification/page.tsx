@@ -3,14 +3,13 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { useAppDispatch, useAppSelector } from "@/app/store/hooks";
-import { setCaptchaVerified } from "@/app/store/userSlice";
+import { useAppwrite } from "@/app/lib/AppwriteContext";
 import LoadingSpinner from "@/app/components/LoadingSpinner";
 
 export default function CaptchaVerification() {
   const router = useRouter();
-  const dispatch = useAppDispatch();
-  const captchaVerified = useAppSelector(state => state.user.captchaVerified);
+  const { userData, updateField } = useAppwrite();
+  const captchaVerified = userData.captchaVerified;
 
   const [verificationComplete, setVerificationComplete] = useState(false);
   const [secondsRemaining, setSecondsRemaining] = useState(0);
@@ -42,10 +41,12 @@ export default function CaptchaVerification() {
       return () => clearTimeout(timer);
     } else if (secondsRemaining === 0 && verificationStep === 2) {
       setVerificationComplete(true);
-      // Update Redux store
-      dispatch(setCaptchaVerified(true));
+      // Update Appwrite data with verification status and timestamp
+      const now = new Date().toISOString();
+      updateField("captchaVerified", true);
+      updateField("captchaVerifiedAt", now);
     }
-  }, [secondsRemaining, verificationStep, dispatch]);
+  }, [secondsRemaining, verificationStep, updateField]);
   
   // Format time as MM:SS
   const formatTime = useCallback((seconds: number) => {
@@ -74,11 +75,11 @@ export default function CaptchaVerification() {
   };
   
   return (
-    <div className="min-h-[calc(100vh-4rem)] bg-gray-50 px-4 py-12">
+    <div className="min-h-[calc(100vh-4rem)] bg-[#0053a0] px-4 py-12">
       <div className="mx-auto max-w-lg">
         <div className="mb-8 text-center">
-          <h1 className="text-3xl font-bold text-blue-800">Security Verification</h1>
-          <p className="mt-3 text-gray-600">
+          <h1 className="text-3xl font-bold text-white">Security Verification</h1>
+          <p className="mt-3 text-white">
             Please complete the verification process to continue
           </p>
         </div>

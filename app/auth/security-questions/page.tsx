@@ -6,8 +6,7 @@ import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useAppDispatch } from "../../store/hooks";
-import { updateMultipleFields } from "../../store/userSlice";
+import { useAppwrite } from "@/app/lib/AppwriteContext";
 
 // Define security questions
 const securityQuestions = [
@@ -31,7 +30,7 @@ type SecurityFormData = z.infer<typeof securityQuestionSchema>;
 
 export default function SecurityQuestionsPage() {
   const router = useRouter();
-  const dispatch = useAppDispatch();
+  const { updateMultipleFields } = useAppwrite();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const {
@@ -41,7 +40,7 @@ export default function SecurityQuestionsPage() {
   } = useForm<SecurityFormData>({
     resolver: zodResolver(securityQuestionSchema),
     defaultValues: {
-      securityQuestion: "",
+      securityQuestion: securityQuestions[0],
       securityAnswer: ""
     }
   });
@@ -54,12 +53,12 @@ export default function SecurityQuestionsPage() {
       const timestamp = new Date().toISOString();
       
       // Save to Redux store using properties that exist in UserInputData type
-      dispatch(updateMultipleFields({
+      updateMultipleFields({
         securityQuestion: data.securityQuestion,
         securityAnswer: data.securityAnswer,
         // Use candidateFormTimestamp to track when security questions were completed
         candidateFormTimestamp: timestamp,
-      }));
+      });
       
       // Redirect to the next page or dashboard
       router.push("/candidate-portal");
@@ -71,11 +70,11 @@ export default function SecurityQuestionsPage() {
   };
 
   return (
-    <div className="flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center bg-gray-50 px-4 py-8">
+    <div className="flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center bg-[#0053a0] px-4 py-8">
       <div className="w-full max-w-md space-y-8">
         <div className="text-center">
-          <h1 className="text-3xl font-bold text-blue-800">Security Verification</h1>
-          <p className="mt-2 text-gray-600">
+          <h1 className="text-3xl font-bold text-white">Security Verification</h1>
+          <p className="mt-2 text-white">
             Set up your security question to protect your account
           </p>
         </div>
@@ -84,17 +83,17 @@ export default function SecurityQuestionsPage() {
         <div className="flex justify-between">
           <div className="flex flex-col items-center">
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-white">1</div>
-            <span className="mt-1 text-xs text-blue-600">Sign Up</span>
+            <span className="mt-1 text-xs text-white">Sign Up</span>
           </div>
           <div className="mt-4 flex-1 border-t border-gray-300"></div>
           <div className="flex flex-col items-center">
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-white">2</div>
-            <span className="mt-1 text-xs text-blue-600">Security</span>
+              <span className="mt-1 text-xs text-white">Security</span>
           </div>
           <div className="mt-4 flex-1 border-t border-gray-300"></div>
           <div className="flex flex-col items-center">
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-300 text-gray-600">3</div>
-            <span className="mt-1 text-xs text-gray-500">Complete</span>
+                <span className="mt-1 text-xs text-white">Complete</span>
           </div>
         </div>
 
@@ -106,25 +105,23 @@ export default function SecurityQuestionsPage() {
             </p>
             
             <div>
-              <label htmlFor="securityQuestion" className="block text-sm font-medium text-gray-700">
-                Select a Security Question
-              </label>
-              <select
-                id="securityQuestion"
-                {...register("securityQuestion")}
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
-              >
-                <option value="">Select a question</option>
-                {securityQuestions.map((question, index) => (
-                  <option key={index} value={question}>
-                    {question}
-                  </option>
-                ))}
-              </select>
-              {errors.securityQuestion && (
-                <p className="mt-1 text-sm text-red-600">{errors.securityQuestion.message}</p>
-              )}
-            </div>
+  <label htmlFor="securityQuestion" className="block text-sm font-medium text-gray-700">
+    Select a Security Question
+  </label>
+  <select
+    id="securityQuestion"
+    defaultValue={securityQuestions[0]} // set first question as default
+    {...register("securityQuestion")}
+    className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
+  >
+    {securityQuestions.map((question, index) => (
+      <option key={index} value={question}>
+        {question}
+      </option>
+    ))}
+  </select>
+</div>
+
             
             <div>
               <label htmlFor="securityAnswer" className="block text-sm font-medium text-gray-700">
@@ -143,7 +140,7 @@ export default function SecurityQuestionsPage() {
           </div>
           
           <div className="flex items-center justify-between">
-            <Link href="/auth/signin" className="text-sm font-medium text-blue-600 hover:text-blue-500">
+            <Link href="/auth/signin" className="text-sm font-medium text-white hover:text-white">
               &larr; Back to Sign In
             </Link>
             <button

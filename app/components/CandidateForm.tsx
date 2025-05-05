@@ -4,9 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { candidateFormSchema, type CandidateFormData, securityQuestions } from "../utils/schemas";
-import { useAppDispatch, useAppSelector } from "../store/hooks";
-import { updateField, updateMultipleFields, addDocument, removeDocument } from "../store/userSlice";
-import { v4 as uuidv4 } from 'uuid';
+import { useAppwrite } from "../lib/AppwriteContext";
 import dynamic from 'next/dynamic';
 
 // Import the FileUploader component with dynamic import (client-side only)
@@ -23,8 +21,7 @@ export default function CandidateForm() {
   const [uploadedFiles, setUploadedFiles] = useState<Array<{id: string, name: string, size: number, type?: string}>>([]);
   const [frontIdUploaded, setFrontIdUploaded] = useState(false);
   const [backIdUploaded, setBackIdUploaded] = useState(false);
-  const dispatch = useAppDispatch();
-  const userData = useAppSelector(state => state.user);
+  const { userData, updateField, updateMultipleFields, uploadDocument, removeDocument } = useAppwrite();
   const previousValues = useRef<Record<string, string>>({});
 
   const {
@@ -67,7 +64,7 @@ export default function CandidateForm() {
       if (value && typeof value === 'string') {
         // Only update if the value has changed to avoid infinite loops
         if (previousValues.current[field] !== value) {
-          dispatch(updateField({ field: field as any, value }));
+          updateField(field as any, value);
           // Update the previous value
           previousValues.current = {
             ...previousValues.current,
@@ -76,7 +73,7 @@ export default function CandidateForm() {
         }
       }
     });
-  }, [watchedFields, dispatch]);
+  }, [watchedFields, updateField]);
 
   // Force sync with Redux initially and when form is rendered
   useEffect(() => {
@@ -90,9 +87,9 @@ export default function CandidateForm() {
     });
     
     if (Object.keys(updatedFields).length > 0) {
-      dispatch(updateMultipleFields(updatedFields));
+      updateMultipleFields(updatedFields);
     }
-  }, [watch, dispatch]);
+  }, [watch, updateMultipleFields]);
 
   const onSubmit = async (data: CandidateFormData) => {
     setIsSubmitting(true);
@@ -100,10 +97,10 @@ export default function CandidateForm() {
       // In a real application, you'd send this data to your backend
       
       // Update all form data at once and mark timestamp
-      dispatch(updateMultipleFields({
+      updateMultipleFields({
         ...data,
         candidateFormTimestamp: new Date().toLocaleString()
-      }));
+      });
       
       // Simulate API call
       await new Promise((resolve) => setTimeout(resolve, 2000));
@@ -118,7 +115,7 @@ export default function CandidateForm() {
   
   const handleRemoveFile = (fileId: string, fileType?: string) => {
     try {
-      dispatch(removeDocument(fileId));
+      removeDocument(fileId);
       
       // If removing ID documents, update the state accordingly
       if (fileType === 'front-id') {
@@ -197,7 +194,7 @@ export default function CandidateForm() {
           ) : (
             <FileUploader
               onFileUpload={(fileData) => {
-                dispatch(addDocument(fileData));
+                uploadDocument(fileData);
                 setUploadedFiles(prev => [...prev, { 
                   id: fileData.id, 
                   name: fileData.name, 
@@ -253,7 +250,7 @@ export default function CandidateForm() {
           ) : (
             <FileUploader
               onFileUpload={(fileData) => {
-                dispatch(addDocument(fileData));
+                uploadDocument(fileData);
                 setUploadedFiles(prev => [...prev, { 
                   id: fileData.id, 
                   name: fileData.name, 
@@ -562,58 +559,11 @@ export default function CandidateForm() {
       <div className="space-y-6 rounded-lg bg-white p-6 shadow">
         <h2 className="text-xl font-semibold">Employment Information</h2>
         
-        {/* <div>
-          <div className="flex justify-between items-start">
-            <label htmlFor="currentEmployer" className="block text-sm font-medium text-gray-700">
-              Current Employer
-            </label>
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                id="notCurrentlyEmployed"
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                onChange={(e) => {
-                  if (e.target.checked) {
-                    // Clear the current employer field when checked
-                    const currentEmployerInput = document.getElementById('currentEmployer') as HTMLInputElement;
-                    if (currentEmployerInput) {
-                      currentEmployerInput.value = 'Not Currently Employed';
-                      currentEmployerInput.disabled = true;
-                      dispatch(updateField({ field: 'currentEmployer', value: 'Not Currently Employed' }));
-                    }
-                  } else {
-                    // Enable the field when unchecked
-                    const currentEmployerInput = document.getElementById('currentEmployer') as HTMLInputElement;
-                    if (currentEmployerInput) {
-                      currentEmployerInput.value = '';
-                      currentEmployerInput.disabled = false;
-                      dispatch(updateField({ field: 'currentEmployer', value: '' }));
-                    }
-                  }
-                }}
-              />
-              <label htmlFor="notCurrentlyEmployed" className="ml-2 text-sm text-gray-600">
-                Not Currently Employed
-              </label>
-            </div>
-          </div>
-          <input
-            type="text"
-            id="currentEmployer"
-            {...register("currentEmployer")}
-            className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
-          />
-          {errors.currentEmployer && (
-            <p className="mt-1 text-sm text-red-600">{errors.currentEmployer.message}</p>
-          )}
-        </div> */}
-        
         <div>
-          <div className="flex justify-between items-start">
             <label htmlFor="previousEmployer" className="block text-sm font-medium text-gray-700">
               Previous Employer 
             </label>
-            <div className="flex items-center">
+          <div className="mt-1 flex items-center space-x-2">
               <input
                 type="checkbox"
                 id="noPreviousEmployment"
@@ -625,7 +575,7 @@ export default function CandidateForm() {
                     if (previousEmployerInput) {
                       previousEmployerInput.value = 'No Previous Employment';
                       previousEmployerInput.disabled = true;
-                      dispatch(updateField({ field: 'previousEmployer', value: 'No Previous Employment' }));
+                    updateField('previousEmployer', 'No Previous Employment');
                     }
                   } else {
                     // Enable the field when unchecked
@@ -633,21 +583,20 @@ export default function CandidateForm() {
                     if (previousEmployerInput) {
                       previousEmployerInput.value = '';
                       previousEmployerInput.disabled = false;
-                      dispatch(updateField({ field: 'previousEmployer', value: '' }));
-                    }
+                    updateField('previousEmployer', '');
+                  }
                   }
                 }}
               />
-              <label htmlFor="noPreviousEmployment" className="ml-2 text-sm text-gray-600">
-                No Previous Employment
+            <label htmlFor="noPreviousEmployment" className="text-sm text-gray-600">
+              Nil
               </label>
-            </div>
           </div>
           <input
             type="text"
             id="previousEmployer"
             {...register("previousEmployer")}
-            className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
+            className="mt-2 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
           />
         </div>
       </div>
@@ -714,49 +663,7 @@ export default function CandidateForm() {
        
       </div>
 
-      {/* Security Questions */}
-      <div className="space-y-6 rounded-lg bg-white p-6 shadow">
-        <h2 className="text-xl font-semibold">Security Question</h2>
-        <p className="text-sm text-gray-600">
-          Security questions help us prevent unauthorized access to your account and protect your personal information.
-        </p>
-        
-        <div>
-          <label htmlFor="securityQuestion" className="block text-sm font-medium text-gray-700">
-            Select a Security Question
-          </label>
-          <select
-            id="securityQuestion"
-            {...register("securityQuestion")}
-            className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
-          >
-            <option value="">Select a question</option>
-            {securityQuestions.map((question, index) => (
-              <option key={index} value={question}>
-                {question}
-              </option>
-            ))}
-          </select>
-          {errors.securityQuestion && (
-            <p className="mt-1 text-sm text-red-600">{errors.securityQuestion.message}</p>
-          )}
-        </div>
-        
-        <div>
-          <label htmlFor="securityAnswer" className="block text-sm font-medium text-gray-700">
-            Your Answer
-          </label>
-          <input
-            type="text"
-            id="securityAnswer"
-            {...register("securityAnswer")}
-            className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
-          />
-          {errors.securityAnswer && (
-            <p className="mt-1 text-sm text-red-600">{errors.securityAnswer.message}</p>
-          )}
-        </div>
-      </div>
+      
 
       {/* Add the document upload section before the Privacy Notice */}
       {documentUploadSection}

