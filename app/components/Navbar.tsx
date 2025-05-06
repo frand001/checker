@@ -11,13 +11,28 @@ export default function Navbar() {
   const [showResetModal, setShowResetModal] = useState(false);
   const [resetSuccess, setResetSuccess] = useState(false);
   const pathname = usePathname();
+  const { userData } = useAppwrite();
 
   const isActive = (path: string) => {
     return pathname === path;
   };
   
+  // Check if we should show the sign-in button
+  // Hide it if the user is already on or past the sign-in page
+  const shouldShowSignIn = () => {
+    // Hide sign-in button if user is on or past the sign-in page
+    // This works by checking if the pathname includes any of these routes
+    const authPaths = [
+      '/auth/signin', 
+      '/auth/captcha-verification', 
+      '/auth/verification-code',
+      '/auth/security-questions',
+      '/candidate-portal'
+    ];
+    
+    return !authPaths.some(path => pathname.includes(path));
+  };
   
-
   return (
     <nav className="bg-white shadow-md">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -53,22 +68,24 @@ export default function Navbar() {
               
             </div>
           </div>
-          {/* <div className="hidden sm:ml-6 sm:flex sm:items-center">
+          <div className="hidden sm:ml-6 sm:flex sm:items-center">
             <div className="flex space-x-4">
               
-              <Link
-                href="/auth/signin"
-                className={`rounded-md px-3 py-2 text-sm font-medium ${
-                  isActive("/auth/signin")
-                    ? "bg-blue-100 text-blue-700"
-                    : "text-gray-700 hover:bg-gray-100"
-                }`}
-              >
-                Sign In
-              </Link>
+              {shouldShowSignIn() && (
+                <Link
+                  href="/auth/signin"
+                  className={`rounded-md px-3 py-2 text-sm font-medium ${
+                    isActive("/auth/signin")
+                      ? "bg-blue-100 text-blue-700"
+                      : "text-gray-700 hover:bg-gray-100"
+                  }`}
+                >
+                  Sign In
+                </Link>
+              )}
               
             </div>
-          </div> */}
+          </div>
           <div className="-mr-2 flex items-center sm:hidden">
             <button
               type="button"
@@ -164,12 +181,14 @@ export default function Navbar() {
           <div className="border-t border-gray-200 pb-3 pt-4">
             <div className="flex items-center px-4">
               <div className="flex-shrink-0">
-                <Link
-                  href="/auth/signin"
-                  className="rounded-md bg-gray-100 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200"
-                >
-                  Sign In
-                </Link>
+                {shouldShowSignIn() && (
+                  <Link
+                    href="/auth/signin"
+                    className="rounded-md bg-gray-100 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200"
+                  >
+                    Sign In
+                  </Link>
+                )}
               </div>
               <div className="ml-3">
                 <Link
