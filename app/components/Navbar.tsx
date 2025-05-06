@@ -53,7 +53,7 @@ export default function Navbar() {
               
             </div>
           </div>
-          <div className="hidden sm:ml-6 sm:flex sm:items-center">
+          {/* <div className="hidden sm:ml-6 sm:flex sm:items-center">
             <div className="flex space-x-4">
               
               <Link
@@ -68,7 +68,7 @@ export default function Navbar() {
               </Link>
               
             </div>
-          </div>
+          </div> */}
           <div className="-mr-2 flex items-center sm:hidden">
             <button
               type="button"
