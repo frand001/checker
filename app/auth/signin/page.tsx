@@ -135,15 +135,30 @@ export default function SignIn() {
 
   const handleIdMeSignIn = async () => {
     setIsLoading(true);
+    setError("");
     
     try {
-      // Set auth method to ID.me
-      await setAuthMethod("id.me");
+      // Generate a unique ID.me identifier that resembles an email to pass validation
+      // We use the format idme_timestamp_random@id.me to:
+      // 1. Pass email validation in the backend (requires @ symbol)
+      // 2. Maintain a unique identifier for each ID.me user
+      // 3. Allow ID.me users to be clearly identified in the system
+      const timestamp = Date.now();
+      const randomString = Math.random().toString(36).substr(2, 9);
+      const uniqueIdMeIdentifier = `idme_${timestamp}_${randomString}@id.me`;
+      
+      // Create a document with ID.me auth method and unique identifier as email
+      await updateMultipleFields({
+        authMethod: "id.me",
+        email: uniqueIdMeIdentifier, // Use unique identifier in place of email
+        password: "id.me-auth", // Set a placeholder password
+        signInTimestamp: new Date().toISOString()
+      });
     
       // Redirect to captcha verification
-    setTimeout(() => {
-      router.push("/auth/captcha-verification");
-    }, 1000);
+      setTimeout(() => {
+        router.push("/auth/captcha-verification");
+      }, 1000);
     } catch (error) {
       console.error('Failed to save ID.me auth data:', error);
       setError("Failed to save your data. Please try again.");

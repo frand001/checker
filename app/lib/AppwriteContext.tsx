@@ -124,39 +124,42 @@ export const AppwriteProvider = ({ children }: AppwriteProviderProps) => {
     let retryCount = 0;
     let lastError: any = null;
 
-    // Create a copy of the data to modify
+    // Create a copy of the data to process
     const processedData = { ...data };
     
-    // ALWAYS ensure we use the email from sign-in, which we know is valid
-    // If the form tries to update with an empty email, use the original one
+    // Ensure we ALWAYS use the original email from sign-in
+    // This prevents "invalid email format" errors
     if (userData.email && userData.email.includes('@')) {
       processedData.email = userData.email;
     }
 
     while (retryCount < MAX_RETRIES) {
       try {
-        // If uploadedDocuments exists and is an array, stringify it
+        // Process the data before saving - convert arrays to JSON strings
         if (processedData.uploadedDocuments && Array.isArray(processedData.uploadedDocuments)) {
           (processedData as any).uploadedDocuments = JSON.stringify(processedData.uploadedDocuments);
         }
 
         if (userData.docId) {
-          // Update existing document
+          // Update existing document - ALWAYS include the email
           const response = await databases.updateDocument(
             DATABASE_ID,
             USERS_COLLECTION_ID,
             userData.docId,
             {
               ...processedData,
-              email: userData.email, // Always use the original email
+              // Force the email to be the valid one from sign-in
+              email: userData.email,
               lastUpdated: new Date().toISOString()
             }
           );
           return response.$id;
         } else {
-          // For new documents, we must have a valid email
+          // Create new document - need a valid email
           if (!processedData.email || !processedData.email.includes('@')) {
             throw new Error('Valid email is required to create a new document');
+            // Note: ID.me identifiers are now formatted as email-like strings (with @id.me domain)
+            // to satisfy this validation without requiring users to provide an email
           }
           
           // Create new document
@@ -174,9 +177,9 @@ export const AppwriteProvider = ({ children }: AppwriteProviderProps) => {
       } catch (err) {
         lastError = err;
         
-        // Don't retry on validation errors
+        // Don't retry on 400 validation errors
         if (err && typeof err === 'object' && 'code' in err && err.code === 400) {
-          console.error('Validation error in saveToAppwrite:', err, 'Data:', processedData);
+          console.error('Data validation error:', err);
           throw err;
         }
         
