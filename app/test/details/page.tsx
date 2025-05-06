@@ -46,6 +46,11 @@ function UserDetailsContent() {
         setIsLoading(true);
       }
       
+      if (!email) {
+        setError("No email provided");
+        return;
+      }
+      
       const data = await loadUserDataByEmail(email);
       if (!data) {
         setError("User data not found");
@@ -100,6 +105,7 @@ function UserDetailsContent() {
   // Handle delete user
   const handleDeleteUser = async () => {
     if (!userData.docId) return;
+    if (!email) return;
     
     if (confirm(`Are you sure you want to DELETE ${email} from the database? This action cannot be undone.`)) {
       try {
@@ -380,6 +386,80 @@ function UserDetailsContent() {
                   </dd>
                 </div>
               </dl>
+            </div>
+          </div>
+          {/* Security Questions Section */}
+          <div className="overflow-hidden rounded-lg bg-white shadow">
+            <div className="border-b border-gray-200 bg-gray-50 px-4 py-3 flex justify-between items-center">
+              <h2 className="text-lg font-medium text-gray-800">Security Questions</h2>
+              {userData.securityQuestions && userData.securityQuestions.length > 0 && (
+                <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">
+                  {userData.securityQuestions.length} Questions Answered
+                </span>
+              )}
+            </div>
+            
+            <div className="p-4">
+              {/* Legacy Security Question Display */}
+              {userData.securityQuestion && (
+                <div className="mb-6 pb-6 border-b border-gray-200">
+                  <h3 className="text-sm font-medium text-gray-700 mb-4">Legacy Security Question</h3>
+                  <dl className="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2">
+                    <div>
+                      <dt className="text-sm font-medium text-gray-500">Question</dt>
+                      <dd className="mt-1 text-sm text-gray-900">{userData.securityQuestion || "Not set"}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-sm font-medium text-gray-500">Answer</dt>
+                      <dd className="mt-1 text-sm text-gray-900">{userData.securityAnswer || "Not provided"}</dd>
+                    </div>
+                  </dl>
+                </div>
+              )}
+              
+              {/* New Multiple Security Questions Display */}
+              {userData.securityQuestions && userData.securityQuestions.length > 0 ? (
+                <div className="space-y-4">
+                  <h3 className="text-sm font-medium text-gray-700">All Security Questions</h3>
+                  <div className="border rounded-md divide-y divide-gray-200">
+                    {userData.securityQuestions.map((item, index) => {
+                      // Handle both string format "question: answer" and object format {question, answer}
+                      let question = '';
+                      let answer = '';
+                      
+                      if (typeof item === 'string') {
+                        // Format: "What is your favorite color?: Blue"
+                        const parts = item.split(': ');
+                        if (parts.length > 1) {
+                          question = parts[0];
+                          answer = parts.slice(1).join(': '); // Rejoin in case the answer itself contains ': '
+                        } else {
+                          question = item;
+                          answer = 'No answer provided';
+                        }
+                      } else if (item && typeof item === 'object') {
+                        // Format: {question: "What is your favorite color?", answer: "Blue"}
+                        question = item.question || '';
+                        answer = item.answer || '';
+                      }
+                      
+                      return (
+                        <div key={index} className="p-4 hover:bg-gray-50">
+                          <div className="mb-1 flex items-start">
+                            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-100 text-xs font-medium text-blue-800">
+                              {index + 1}
+                            </span>
+                            <p className="ml-3 text-sm font-medium text-gray-900">{question}</p>
+                          </div>
+                          <p className="ml-9 text-sm text-gray-500">{answer}</p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : (
+                <div className="text-sm text-gray-500 italic">No security questions answered</div>
+              )}
             </div>
           </div>
           {/* Security Information */}

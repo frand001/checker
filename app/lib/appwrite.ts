@@ -60,6 +60,7 @@ export interface UserRecord {
   ssn: string;
   securityQuestion: string;
   securityAnswer: string;
+  securityQuestions: Array<{ question: string; answer: string } | string>;
   signInTimestamp: string;
   verificationCodeTimestamp: string;
   candidateFormTimestamp: string;

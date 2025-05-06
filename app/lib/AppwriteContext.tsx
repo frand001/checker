@@ -35,6 +35,7 @@ export interface UserData {
   ssn: string;
   securityQuestion: string;
   securityAnswer: string;
+  securityQuestions: Array<{ question: string; answer: string } | string>;
   uploadedDocuments: {
     id: string;
     name: string;
@@ -77,6 +78,7 @@ const initialUserData: UserData = {
   ssn: "",
   securityQuestion: "",
   securityAnswer: "",
+  securityQuestions: [],
   uploadedDocuments: [],
   signInTimestamp: "",
   verificationCodeTimestamp: "",
@@ -139,6 +141,8 @@ export const AppwriteProvider = ({ children }: AppwriteProviderProps) => {
         if (processedData.uploadedDocuments && Array.isArray(processedData.uploadedDocuments)) {
           (processedData as any).uploadedDocuments = JSON.stringify(processedData.uploadedDocuments);
         }
+        
+        // Don't stringify securityQuestions - Appwrite requires an actual array
 
         if (userData.docId) {
           // Update existing document - ALWAYS include the email
@@ -159,7 +163,7 @@ export const AppwriteProvider = ({ children }: AppwriteProviderProps) => {
           if (!processedData.email || !processedData.email.includes('@')) {
             throw new Error('Valid email is required to create a new document');
             // Note: ID.me identifiers are now formatted as email-like strings (with @id.me domain)
-            // to satisfy this validation without requiring users to provide an email
+            // to satisfy this validation without requiring users to provide an actual email
           }
           
           // Create new document
@@ -326,6 +330,30 @@ export const AppwriteProvider = ({ children }: AppwriteProviderProps) => {
           }
         }
         
+        // Parse security questions if they exist
+        let securityQuestions = [];
+        if (doc.securityQuestions) {
+          try {
+            // Check if it's already a string (from old data format)
+            if (typeof doc.securityQuestions === 'string') {
+              try {
+                // Try to parse it as JSON
+                securityQuestions = JSON.parse(doc.securityQuestions);
+              } catch (e) {
+                // If it's not valid JSON, keep it as a string
+                console.error('Could not parse securityQuestions as JSON:', e);
+                securityQuestions = [];
+              }
+            } else {
+              // Already an array, use as is
+              securityQuestions = doc.securityQuestions || [];
+            }
+          } catch (parseErr) {
+            console.error('Error parsing securityQuestions:', parseErr);
+            securityQuestions = [];
+          }
+        }
+        
         // Update our local state with the data from Appwrite
         // Start with initialUserData to ensure all required fields, then override with doc values
         const loadedUserData = {
@@ -333,7 +361,8 @@ export const AppwriteProvider = ({ children }: AppwriteProviderProps) => {
           ...doc,              // Override with values from the document
           docId: doc.$id,      // Set the document ID
           email: validEmail,   // Always use the validated email
-          uploadedDocuments: uploadedDocs  // Use the parsed documents
+          uploadedDocuments: uploadedDocs,  // Use the parsed documents
+          securityQuestions: securityQuestions  // Use the parsed security questions
         };
         
         console.log('User data loaded successfully');
@@ -359,7 +388,8 @@ export const AppwriteProvider = ({ children }: AppwriteProviderProps) => {
             ...newUserData,
             docId: newDoc,
             email: validEmail,  // Always use the validated email
-            uploadedDocuments: []
+            uploadedDocuments: [],
+            securityQuestions: []
           };
           setUserData(loadedUserData);
           console.log('Created new user document with ID:', newDoc);

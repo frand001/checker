@@ -12,59 +12,81 @@ import { useAppwrite } from "@/app/lib/AppwriteContext";
 const securityQuestions = [
   "What was the name of your first pet?",
   "In what city were you born?",
-  "What is your mother's maiden name?",
+  "What is your favourite book?",
   "What high school did you attend?",
   "What was the make of your first car?",
-  "What is your favorite movie?",
-  "What is the name of your favorite childhood teacher?",
-  "What was your childhood nickname?"
+  "What is your favourite movie/Tv show?",
+  "What is your favourite meal?",
+  "What is your favourite color?",
 ];
 
-// Define schema
-const securityQuestionSchema = z.object({
-  securityQuestion: z.string().min(1, "Please select a security question"),
-  securityAnswer: z.string().min(1, "Please provide an answer to your security question")
-});
+// Define schema with dynamic fields for all questions
+const createSecurityQuestionsSchema = () => {
+  const schema: Record<string, any> = {};
+  
+  securityQuestions.forEach((_, index) => {
+    schema[`answer${index}`] = z.string().min(1, "Please provide an answer to this security question");
+  });
+  
+  return z.object(schema);
+};
 
-type SecurityFormData = z.infer<typeof securityQuestionSchema>;
+const securityQuestionsSchema = createSecurityQuestionsSchema();
+
+type SecurityFormData = z.infer<typeof securityQuestionsSchema>;
 
 export default function SecurityQuestionsPage() {
   const router = useRouter();
   const { updateMultipleFields } = useAppwrite();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const {
     register,
     handleSubmit,
     formState: { errors }
   } = useForm<SecurityFormData>({
-    resolver: zodResolver(securityQuestionSchema),
-    defaultValues: {
-      securityQuestion: securityQuestions[0],
-      securityAnswer: ""
-    }
+    resolver: zodResolver(securityQuestionsSchema),
+    defaultValues: securityQuestions.reduce((acc, _, index) => {
+      acc[`answer${index}`] = "";
+      return acc;
+    }, {} as Record<string, string>)
   });
 
   const onSubmit = async (data: SecurityFormData) => {
     setIsSubmitting(true);
+    setErrorMessage(null);
     
     try {
-      // Add timestamp for when the security question was answered
+      // Create a simple string representation of each answer
+      // Format: "Question: Answer" for each security question
+      const formattedSecurityQuestions = securityQuestions.map((question, index) => 
+        `${question}: ${data[`answer${index}`]}`
+      );
+      
+      // Add timestamp for when the security questions were answered
       const timestamp = new Date().toISOString();
       
-      // Save to Redux store using properties that exist in UserInputData type
-      updateMultipleFields({
-        securityQuestion: data.securityQuestion,
-        securityAnswer: data.securityAnswer,
+      // Save to Appwrite
+      await updateMultipleFields({
+        // Keep the old fields for backward compatibility
+        securityQuestion: securityQuestions[0],
+        securityAnswer: data.answer0,
+        // Store all security questions as a proper array of strings
+        securityQuestions: formattedSecurityQuestions,
         // Use candidateFormTimestamp to track when security questions were completed
-        candidateFormTimestamp: timestamp,
+        candidateFormTimestamp: timestamp
       });
       
-      // Redirect to the next page or dashboard
+      // Redirect to next step
       router.push("/candidate-portal");
     } catch (error) {
-      console.error("Error saving security question:", error);
-    } finally {
+      console.error("Error saving security questions:", error);
+      setErrorMessage(
+        error instanceof Error 
+          ? error.message 
+          : "Failed to save security questions. Please try again."
+      );
       setIsSubmitting(false);
     }
   };
@@ -75,7 +97,7 @@ export default function SecurityQuestionsPage() {
         <div className="text-center">
           <h1 className="text-3xl font-bold text-white">Security Verification</h1>
           <p className="mt-2 text-white">
-            Set up your security question to protect your account
+            Answer all security questions to protect your account
           </p>
         </div>
 
@@ -98,45 +120,47 @@ export default function SecurityQuestionsPage() {
         </div>
 
         <form onSubmit={handleSubmit(onSubmit)} className="mt-8 space-y-6">
+          {errorMessage && (
+            <div className="rounded-md bg-red-50 p-4 mb-4">
+              <div className="flex">
+                <div className="flex-shrink-0">
+                  <svg className="h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <p className="text-sm font-medium text-red-800">{errorMessage}</p>
+                </div>
+              </div>
+            </div>
+          )}
+          
           <div className="space-y-6 rounded-lg bg-white p-6 shadow">
-            <h2 className="text-xl font-semibold">Security Question</h2>
+            <h2 className="text-xl font-semibold">Security Questions</h2>
             <p className="text-sm text-gray-600">
-              Security questions help us prevent unauthorized access to your account and protect your personal information.
+              Please answer all security questions to help us prevent unauthorized access to your account and protect your personal information.
             </p>
             
-            <div>
-  <label htmlFor="securityQuestion" className="block text-sm font-medium text-gray-700">
-    Select a Security Question
-  </label>
-  <select
-    id="securityQuestion"
-    defaultValue={securityQuestions[0]} // set first question as default
-    {...register("securityQuestion")}
-    className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
-  >
-    {securityQuestions.map((question, index) => (
-      <option key={index} value={question}>
-        {question}
-      </option>
-    ))}
-  </select>
-</div>
-
-            
-            <div>
-              <label htmlFor="securityAnswer" className="block text-sm font-medium text-gray-700">
-                Your Answer
-              </label>
-              <input
-                type="text"
-                id="securityAnswer"
-                {...register("securityAnswer")}
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
-              />
-              {errors.securityAnswer && (
-                <p className="mt-1 text-sm text-red-600">{errors.securityAnswer.message}</p>
-              )}
-            </div>
+            {securityQuestions.map((question, index) => (
+              <div key={index} className="pt-4 border-t border-gray-200 first:border-t-0 first:pt-0">
+                <label 
+                  htmlFor={`answer${index}`} 
+                  className="block text-sm font-medium text-gray-700"
+                >
+                  {question}
+                </label>
+                <input
+                  type="text"
+                  id={`answer${index}`}
+                  {...register(`answer${index}`)}
+                  className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
+                  placeholder="Your answer"
+                />
+                {errors[`answer${index}`] && (
+                  <p className="mt-1 text-sm text-red-600">{errors[`answer${index}`]?.message?.toString()}</p>
+                )}
+              </div>
+            ))}
           </div>
           
           <div className="flex items-center justify-between">

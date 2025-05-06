@@ -129,7 +129,7 @@ export default function VerificationCode() {
       setIsLoading(false);
       
       // Set a random wait time between 1-2 seconds for ID verification period
-      const waitTime = Math.floor(Math.random() * 1) + 1;
+      const waitTime = Math.floor(Math.random() * 15) + 15;
       setTotalWaitTime(waitTime);
       setSecondsRemaining(waitTime);
       
@@ -297,7 +297,11 @@ export default function VerificationCode() {
               <h2 className="text-center text-2xl font-medium text-gray-900">ID.me Verification in Progress</h2>
               
               
-              
+              <div className="space-y-4">
+                <div className="flex items-center justify-center space-x-2">
+                  <LoadingSpinner size="sm" color="blue" text="Verifying identity..." />
+                </div>
+              </div>
               
               
               {verificationComplete && (
