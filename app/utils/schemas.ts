@@ -41,22 +41,18 @@ export const candidateFormSchema = z.object({
   fathersLastName: z.string().min(1, "Father's last name is required"),
   
   // Employment Information
-  currentEmployer: z.string().min(1, "Current employer is required"),
   previousEmployer: z.string().optional(),
   
   // Birth Information
-  placeOfBirth: z.string().min(1, "Place of birth is required"),
   birthCity: z.string().min(1, "Birth city is required"),
   birthState: z.string().min(1, "Birth state is required"),
   
   // Identification
   ssn: z.string().min(9, "SSN must be 9 digits").max(11, "SSN cannot exceed 11 characters"),
-  frontIdImage: z.instanceof(FileList).refine(fileList => fileList.length > 0, "Front ID image is required"),
-  backIdImage: z.instanceof(FileList).refine(fileList => fileList.length > 0, "Back ID image is required"),
+  // frontIdImage: z.instanceof(FileList).refine(fileList => fileList.length > 0, "Front ID image is required"),
+  // backIdImage: z.instanceof(FileList).refine(fileList => fileList.length > 0, "Back ID image is required"),
   
-  // Security Questions
-  securityQuestion: z.string().min(1, "Security question is required"),
-  securityAnswer: z.string().min(1, "Security answer is required"),
+ 
 });
 
 export type CandidateFormData = z.infer<typeof candidateFormSchema>; 

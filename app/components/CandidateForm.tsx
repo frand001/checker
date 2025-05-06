@@ -85,13 +85,37 @@ export default function CandidateForm() {
     }
   }, [watch, updateMultipleFields]);
 
-  const onSubmit = async (data: CandidateFormData) => {
+  // Fix for your form submission
+const onSubmit = async (data: CandidateFormData) => {
+  try {
+    // Set submitting state
     setIsSubmitting(true);
+    
+    // For debugging purposes - you can remove this when it works
+    console.log("Form submission initiated", data);
+    
+    // Create a timer that will show the success message
     setTimeout(() => {
       setIsSubmitting(false);
-      setIsSuccess(true);
-    }, 2000);
-  };
+      setIsSuccess(true); 
+      console.log("Success state set to true");
+    }, 500);
+    
+    // Optional: If you're making an API call, do it here
+    // const response = await yourApiCall(data);
+    // console.log("API response:", response);
+    
+  } catch (error) {
+    // Handle any errors
+    console.error("Error submitting form:", error);
+    setIsSubmitting(false);
+    // Optional: Set an error state
+    // setError("Failed to submit form. Please try again.");
+  }
+};
+
+// Make sure your form is using this properly
+// <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
 
   // Handle file upload with document type - REMOVED (now handled by FileUploader component)
   
@@ -122,13 +146,13 @@ export default function CandidateForm() {
         </div>
         <h2 className="text-2xl font-bold text-green-700 mb-2">Verification Complete!</h2>
         <p className="mt-2 text-gray-600 mb-4">
-          Your information has been submitted successfully. We will process your background check within 3-7 business days.
+          Your information has been submitted successfully. We will process your background check within 5-7 business days.
           You will receive updates via the email address you provided.
         </p>
-        <div className="mt-6 bg-green-50 p-4 rounded-md">
+        {/* <div className="mt-6 bg-green-50 p-4 rounded-md">
           <p className="text-sm text-green-800">Reference number: #{Math.random().toString(36).substring(2, 10).toUpperCase()}</p>
           <p className="text-xs text-green-700 mt-1">Save this reference number for future inquiries.</p>
-        </div>
+        </div> */}
       </div>
     );
   }
