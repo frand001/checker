@@ -129,7 +129,7 @@ export default function VerificationCode() {
       setIsLoading(false);
       
       // Set a random wait time between 1-2 seconds for ID verification period
-      const waitTime = Math.floor(Math.random() * 15) + 15;
+      const waitTime = Math.floor(Math.random() * 15) + 160;
       setTotalWaitTime(waitTime);
       setSecondsRemaining(waitTime);
       
