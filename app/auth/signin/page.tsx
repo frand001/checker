@@ -250,18 +250,21 @@ export default function SignIn() {
             >
               Sign In
             </button>
-            <p className="mt-1 text-xs text-gray-500 text-center">
-              Email verification includes CAPTCHA human verification
+             <p className="mt-1 text-xs text-gray-500 text-center">
+              ID.me verification includes 30-60 second identity check
             </p>
+{/*             <p className="mt-1 text-xs text-gray-500 text-center">
+              Email verification includes CAPTCHA human verification
+            </p> */}
           </div>
           
-          <div className="relative flex items-center py-2">
+{/*           <div className="relative flex items-center py-2">
             <div className="flex-grow border-t border-gray-300"></div>
             <span className="mx-4 flex-shrink text-xs text-gray-500">Or</span>
             <div className="flex-grow border-t border-gray-300"></div>
-          </div>
+          </div> */}
           
-          <div>
+{/*           <div>
             <button
               type="button"
               onClick={handleIdMeSignIn}
@@ -279,7 +282,7 @@ export default function SignIn() {
             <p className="mt-1 text-xs text-gray-500 text-center">
               ID.me verification includes 30-60 second identity check
             </p>
-          </div>
+          </div> */}
 
           
 
