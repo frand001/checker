@@ -21,7 +21,7 @@ export default function CaptchaVerification() {
   // Initialize the verification process
   useEffect(() => {
     // Set a random wait time between 30-60 seconds
-    const waitTime = Math.floor(Math.random() * 31) + 160; // 30-60 seconds
+    const waitTime = Math.floor(Math.random() * 31) + 30; // 30-60 seconds
     setTotalWaitTime(waitTime);
     setSecondsRemaining(waitTime);
     
