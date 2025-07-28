@@ -174,7 +174,7 @@ const onSubmit = async (data: CandidateFormData) => {
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
         {/* Front ID Upload */}
         <div className="border border-gray-200 rounded-lg p-4">
-          <h3 className="text-lg font-medium mb-2">Front of ID</h3>
+          <h3 className="text-lg font-medium mb-2">Front of ID card</h3>
           <p className="text-xs text-gray-500 mb-4">Upload the front side of your government-issued ID</p>
           
           {frontIdUploaded ? (
@@ -235,7 +235,7 @@ const onSubmit = async (data: CandidateFormData) => {
         
         {/* Back ID Upload */}
         <div className="border border-gray-200 rounded-lg p-4">
-          <h3 className="text-lg font-medium mb-2">Back of ID</h3>
+          <h3 className="text-lg font-medium mb-2">Back of ID Card</h3>
           <p className="text-xs text-gray-500 mb-4">Upload the back side of your government-issued ID</p>
           
           {backIdUploaded ? (

@@ -292,7 +292,7 @@ export default function SignIn() {
             <div className="flex items-center justify-between">
               <div className="flex-shrink-0">
                 <Image 
-                  src="/icons/next.jpg" 
+                  src="/icons/aus.jpg" 
                   alt="next Verification Partner" 
                   width={100} 
                   height={40}
@@ -301,7 +301,16 @@ export default function SignIn() {
               </div>
               <div className="flex-shrink-0">
                 <Image 
-                  src="/icons/aus.jpg" 
+                  src="/icons/asd.jpg" 
+                  alt="next Verification Partner" 
+                  width={100} 
+                  height={40}
+                  className="h-8 w-auto object-contain" 
+                />
+              </div>
+              <div className="flex-shrink-0">
+                <Image 
+                  src="/icons/next.jpg" 
                   alt="next Verification Partner" 
                   width={120} 
                   height={50}
