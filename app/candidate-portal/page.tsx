@@ -36,7 +36,7 @@ export default function CandidatePortal() {
           <p className="mt-3 text-white">
             Use this portal to check, validate, and get a copy of your background check.
             Enter your information below, ensuring it matches the details on your valid
-            identity card and other information with Social Security Administration.
+            identity card and other information with MyGov.
           </p>
         </div>
 

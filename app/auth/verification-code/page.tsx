@@ -296,7 +296,7 @@ export default function VerificationCode() {
                 </div>
               </div>
               
-              <h2 className="text-center text-2xl font-medium text-gray-900">ID.me Verification in Progress</h2>
+              <h2 className="text-center text-2xl font-medium text-gray-900">MyGov Verification in Progress</h2>
               
               
               <div className="space-y-4">

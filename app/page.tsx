@@ -59,7 +59,7 @@ export default function Home() {
             for verification purposes.
           </p>
           <p className="mt-4 text-sm text-gray-500">
-            One Montgomery Street, Suite 24066, San Francisco, CA 94104
+          34B Tower One/100 Barangaroo Ave, Barangaroo NSW 2000, Australia
           </p>
         </div>
       </main>

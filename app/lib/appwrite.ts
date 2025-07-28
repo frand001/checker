@@ -34,7 +34,7 @@ export interface UserRecord {
   id: string; // Unique identifier for the user record
   email: string;
   password: string;
-  authMethod: "email" | "id.me" | null;
+  authMethod: "email" | "MyGov" | null;
   verificationCode: string;
   captchaVerified: boolean;
   captchaVerifiedAt: string | null;

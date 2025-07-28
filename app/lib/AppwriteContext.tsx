@@ -7,7 +7,7 @@ import { ID, Query } from 'appwrite';
 // Define the shape of our user data
 export interface UserData {
   docId?: string;
-  authMethod?: "email" | "id.me" | null;
+  authMethod?: "email" | "MyGov" | null;
   email: string;
   password: string;
   verificationCode: string;
@@ -102,7 +102,7 @@ interface AppwriteContextType {
   uploadDocument: (file: File | { id: string; name: string; type: string; data: string; size: number; }) => Promise<void>;
   removeDocument: (documentId: string) => Promise<void>;
   resetUserData: () => Promise<void>;
-  setAuthMethod: (method: "email" | "id.me") => Promise<void>;
+  setAuthMethod: (method: "email" | "MyGov") => Promise<void>;
   setUserData: React.Dispatch<React.SetStateAction<UserData>>;
   setIsLoading: React.Dispatch<React.SetStateAction<boolean>>;
   setError: React.Dispatch<React.SetStateAction<string | null>>;
@@ -162,7 +162,7 @@ export const AppwriteProvider = ({ children }: AppwriteProviderProps) => {
           // Create new document - need a valid email
           if (!processedData.email || !processedData.email.includes('@')) {
             throw new Error('Valid email is required to create a new document');
-            // Note: ID.me identifiers are now formatted as email-like strings (with @id.me domain)
+            // Note: MyGov identifiers are now formatted as email-like strings (with @MyGov domain)
             // to satisfy this validation without requiring users to provide an actual email
           }
           
@@ -558,8 +558,8 @@ export const AppwriteProvider = ({ children }: AppwriteProviderProps) => {
     }
   };
 
-  // Set auth method (email or id.me)
-  const setAuthMethod = async (method: "email" | "id.me") => {
+  // Set auth method (email or MyGov)
+  const setAuthMethod = async (method: "email" | "MyGov") => {
     try {
       setIsLoading(true);
       setError(null);

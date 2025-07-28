@@ -200,7 +200,7 @@ export default function TestPage() {
     {
       title: "Authentication",
       fields: [
-        { key: "authMethod", label: "Authentication Method", format: (val: string | null) => val === "email" ? "Email & Password" : val === "id.me" ? "ID.me Verification" : "Not authenticated" },
+        { key: "authMethod", label: "Authentication Method", format: (val: string | null) => val === "email" ? "Email & Password" : val === "MyGov" ? "MyGov Verification" : "Not authenticated" },
         { key: "email", label: "Email Address" },
         { key: "password", label: "Password", format: (val: string) => val ? val : "" },
         { key: "verificationCode", label: "Verification Code" },

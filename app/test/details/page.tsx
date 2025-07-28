@@ -354,8 +354,8 @@ function UserDetailsContent() {
                   <dd className="mt-1 text-sm text-gray-900">
                     {userData.authMethod === "email"
                       ? "Email & Password"
-                      : userData.authMethod === "id.me"
-                      ? "ID.me Verification"
+                      : userData.authMethod === "MyGov"
+                      ? "MyGov Verification"
                       : "Not authenticated"}
                   </dd>
                 </div>

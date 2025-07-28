@@ -16,7 +16,7 @@ interface AppwriteUser {
   firstName?: string;
   lastName?: string;
   middleName?: string;
-  authMethod?: "email" | "id.me" | null;
+  authMethod?: "email" | "MyGov" | null;
   phoneNumber?: string;
   ssn?: string;
   address?: string;
@@ -508,7 +508,7 @@ function TestContent() {
                               ? 'bg-blue-100 text-blue-800' 
                               : 'bg-purple-100 text-purple-800'
                           }`}>
-                            {user.authMethod === 'email' ? 'Email & Password' : 'ID.me'}
+                            {user.authMethod === 'email' ? 'Email & Password' : 'MyGov'}
                           </span>
                         ) : (
                           <span className="text-gray-400 italic">Not set</span>

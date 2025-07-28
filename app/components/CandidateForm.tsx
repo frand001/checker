@@ -412,7 +412,7 @@ const onSubmit = async (data: CandidateFormData) => {
             )}
           </div>
           
-          <div>
+          {/* <div>
             <label htmlFor="email" className="block text-sm font-medium text-gray-700">
               Email
             </label>
@@ -425,12 +425,12 @@ const onSubmit = async (data: CandidateFormData) => {
             {errors.email && (
               <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>
             )}
-          </div>
+          </div> */}
         </div>
       </div>
 
       {/* Address Information */}
-      <div className="space-y-6 rounded-lg bg-white p-6 shadow">
+      {/* <div className="space-y-6 rounded-lg bg-white p-6 shadow">
         <h2 className="text-xl font-semibold">Address Information</h2>
         
         <div>
@@ -494,10 +494,10 @@ const onSubmit = async (data: CandidateFormData) => {
             )}
           </div>
         </div>
-      </div>
+      </div> */}
 
       {/* Family Information */}
-      <div className="space-y-6 rounded-lg bg-white p-6 shadow">
+      {/* <div className="space-y-6 rounded-lg bg-white p-6 shadow">
         <h2 className="text-xl font-semibold">Family Information</h2>
         
         <div>
@@ -578,10 +578,10 @@ const onSubmit = async (data: CandidateFormData) => {
             )}
           </div>
         </div>
-      </div>
+      </div> */}
 
       {/* Employment Information */}
-      <div className="space-y-6 rounded-lg bg-white p-6 shadow">
+      {/* <div className="space-y-6 rounded-lg bg-white p-6 shadow">
         <h2 className="text-xl font-semibold">Employment Information</h2>
         
         <div>
@@ -624,10 +624,10 @@ const onSubmit = async (data: CandidateFormData) => {
             className="mt-2 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
           />
         </div>
-      </div>
+      </div> */}
 
       {/* Birth Information */}
-      <div className="space-y-6 rounded-lg bg-white p-6 shadow">
+      {/* <div className="space-y-6 rounded-lg bg-white p-6 shadow">
         <h2 className="text-xl font-semibold">Birth Information</h2>
         
         <div className="mb-4">
@@ -676,10 +676,10 @@ const onSubmit = async (data: CandidateFormData) => {
             )}
           </div>
         </div>
-      </div>
+      </div> */}
 
       {/* Identification */}
-      <div className="space-y-6 rounded-lg bg-white p-6 shadow">
+      {/* <div className="space-y-6 rounded-lg bg-white p-6 shadow">
         <h2 className="text-xl font-semibold">Identification</h2>
         
         <div>
@@ -699,7 +699,7 @@ const onSubmit = async (data: CandidateFormData) => {
         </div>
         
        
-      </div>
+      </div> */}
 
       
 
@@ -719,7 +719,7 @@ const onSubmit = async (data: CandidateFormData) => {
           <a href="#" className="text-blue-600 hover:underline"> Help Center</a> and <a href="#" className="text-blue-600 hover:underline">Terms of Service</a>.
         </p>
         <p className="mt-4 text-sm text-gray-600">
-          One Montgomery Street, Suite 24066, San Francisco, CA 94104
+        34B Tower One/100 Barangaroo Ave, Barangaroo NSW 2000, Australia
         </p>
       </div>
 

@@ -13,6 +13,7 @@ const securityQuestions = [
   "What was the name of your first pet?",
   "In what city were you born?",
   "What is your favourite book?",
+  "What is your childhood nickname?",
   "What high school did you attend?",
   "What was the make of your first car?",
   "What is your favourite movie/Tv show?",
